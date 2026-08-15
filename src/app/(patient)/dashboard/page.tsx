@@ -1,3 +1,5 @@
+"use client";
+
 import Link from "next/link";
 import {
   Bot,
@@ -10,6 +12,7 @@ import {
 import { MedicalDisclaimer } from "@/components/layout/MedicalDisclaimer";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
+import { useCurrentSession } from "@/lib/auth/useCurrentSession";
 
 const quickActions = [
   { icon: ClipboardList, label: "Hồ sơ Bệnh án", href: "/records" },
@@ -19,12 +22,15 @@ const quickActions = [
 ];
 
 export default function PatientDashboardPage() {
+  const session = useCurrentSession();
+  const displayName = session?.fullName || "Nguyễn Nam";
+
   return (
     <div>
       <MedicalDisclaimer text="Thông tin do AI gợi ý chỉ mang tính tham khảo, vui lòng gặp bác sĩ để được tư vấn chính xác." />
 
       <div className="mx-auto max-w-[1400px] px-6 py-8">
-        <h1 className="text-h1 font-bold text-ink-900">Xin chào, Nguyễn Văn A</h1>
+        <h1 className="text-h1 font-bold text-ink-900">Xin chào, {displayName}</h1>
         <p className="mt-1 text-body-lg text-ink-700">
           Hôm nay MedAgent có thể giúp gì cho bạn?
         </p>

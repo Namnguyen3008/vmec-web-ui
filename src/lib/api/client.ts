@@ -6,10 +6,11 @@ import {
   updateAuthToken,
 } from "@/lib/auth/session";
 
-const DEFAULT_TIMEOUT_MS = 25_000;
-const API_BASE_URL = (
-  process.env.NEXT_PUBLIC_API_URL || "https://vmec-demo-api.onrender.com"
-).replace(/\/$/, "");
+const DEFAULT_TIMEOUT_MS = 15_000;
+const API_BASE_URL = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000").replace(
+  /\/$/,
+  "",
+);
 
 type RequestOptions = Omit<RequestInit, "body"> & {
   body?: unknown;
