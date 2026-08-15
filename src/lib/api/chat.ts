@@ -623,3 +623,6 @@ export async function sendWorkflowAction(
     };
   }
 }
+
+export const sendChatAction = sendWorkflowAction;
+
