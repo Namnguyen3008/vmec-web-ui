@@ -9,10 +9,6 @@ import type {
 } from "@/lib/api/contracts";
 import { list, mapChatMessage, mapChatSession, mapSendMessageResult, mapWorkflowActionResult } from "@/lib/api/mappers";
 
-// In-Memory / Local Storage key for sessions
-const SESSIONS_STORE_KEY = "vmec.chat.sessions";
-const MESSAGES_STORE_KEY = "vmec.chat.messages";
-
 /**
  * 40 Chuyên khoa & Tri thức định tuyến chuẩn y tế từ Dataset VMEC
  */
@@ -226,7 +222,7 @@ export async function createChatSession(title?: string): Promise<ChatSession> {
     const session: ChatSession = {
       id,
       patientId: "patient_local",
-      status: "OPEN",
+      status: "ACTIVE",
       language: "vi",
       channel: "web",
       title: title || "Tư vấn khám bệnh",
@@ -326,6 +322,8 @@ export async function sendChatMessage(sessionId: string, content: string): Promi
       createdAt: new Date().toISOString(),
     };
 
+    const actions: ChatActionType[] = isEmergency ? [] : ["CONFIRM_TRIAGE", "ACCEPT_APPOINTMENT", "CHANGE_APPOINTMENT", "DECLINE_APPOINTMENT"];
+
     return {
       userMessage,
       assistantMessage,
@@ -337,7 +335,7 @@ export async function sendChatMessage(sessionId: string, content: string): Promi
       },
       workflowState: isEmergency ? "EMERGENCY_TRIGGERED" : "OFFERS_READY",
       missingFields: [],
-      availableActions: isEmergency ? [] : ["CONFIRM_SELECTION", "ASK_CLARIFICATION", "CHANGE_SPECIALTY"],
+      availableActions: actions,
       appointmentOffer: offers[0],
       appointmentOffers: offers,
     };
@@ -362,7 +360,7 @@ export async function sendChatAction(
     return {
       replyText: `Đã xác nhận lựa chọn của bạn với **${doctorName}** (${specialtyName}). Vui lòng kiểm tra lại thông tin và xác nhận giữ chỗ.`,
       workflowState: "CHECKOUT_READY",
-      availableActions: ["PROCEED_CHECKOUT"],
+      availableActions: ["ACCEPT_APPOINTMENT"],
       appointmentOffer: null,
       appointmentOffers: [],
       checkout: {
@@ -405,7 +403,7 @@ export async function closeChatSession(sessionId: string): Promise<ChatSession> 
     return {
       id: sessionId,
       patientId: "patient_local",
-      status: "RESOLVED",
+      status: "COMPLETED",
       language: "vi",
       channel: "web",
       title: "Đã hoàn thành tư vấn",

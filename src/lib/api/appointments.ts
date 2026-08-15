@@ -40,7 +40,7 @@ const DEFAULT_SAMPLE_APPOINTMENTS: Appointment[] = [
     facilityAddress: "123 Nguyễn Trãi, Thanh Xuân, Hà Nội",
     room: "Phòng 302 - Tầng 3",
     scheduleId: "sch_01",
-    status: "PENDING_APPROVAL",
+    status: "PENDING_RECEPTIONIST_APPROVAL",
     bookingReason: "Tức ngực trái nhẹ khi gắng sức, hồi hộp 2 ngày nay.",
     patientNotes: "Bệnh nhân có tiền sử tăng huyết áp.",
     receptionistNotes: null,
@@ -214,7 +214,7 @@ export async function createAppointment(input: {
       facilityAddress: "123 Nguyễn Trãi, Thanh Xuân, Hà Nội",
       room: "Phòng 302 - Tầng 3",
       scheduleId: "sch_01",
-      status: "PENDING_APPROVAL",
+      status: "PENDING_RECEPTIONIST_APPROVAL",
       bookingReason: input.bookingReason || "Tư vấn & Khám theo chỉ định AI",
       patientNotes: input.patientNotes || null,
       receptionistNotes: null,
@@ -282,7 +282,7 @@ export async function listReceptionQueue(): Promise<Appointment[]> {
     return list(await apiRequest<unknown>("/api/v1/appointments/reception/pending"), mapAppointment);
   } catch {
     const local = getLocalAppointments();
-    const pending = local.filter((a) => a.status === "PENDING_APPROVAL" || a.status === "HELD");
+    const pending = local.filter((a) => a.status === "PENDING_RECEPTIONIST_APPROVAL" || a.status === "PENDING_PATIENT_CONFIRMATION");
     return pending.length > 0 ? pending : [DEFAULT_SAMPLE_APPOINTMENTS[0]];
   }
 }
@@ -301,7 +301,7 @@ export async function listDoctorAppointments(): Promise<Appointment[]> {
     return list(await apiRequest<unknown>("/api/v1/appointments/doctor/me"), mapAppointment);
   } catch {
     const local = getLocalAppointments();
-    const confirmed = local.filter((a) => a.status === "CONFIRMED" || a.status === "PENDING_APPROVAL");
+    const confirmed = local.filter((a) => a.status === "CONFIRMED" || a.status === "PENDING_RECEPTIONIST_APPROVAL");
     return confirmed.length > 0 ? confirmed : DEFAULT_SAMPLE_APPOINTMENTS;
   }
 }
@@ -363,7 +363,7 @@ export async function proposeAlternative(id: string, newSlotId: string, reason?:
     const found = local.find((a) => a.id === id) || { ...DEFAULT_SAMPLE_APPOINTMENTS[0], id };
     const updated: Appointment = {
       ...found,
-      status: "PENDING_APPROVAL",
+      status: "PENDING_PATIENT_CONFIRMATION",
       receptionistNotes: `Đề xuất chuyển giờ: ${reason || "Khung giờ phù hợp hơn"}`,
       updatedAt: new Date().toISOString(),
     };
@@ -421,7 +421,7 @@ export async function changeAppointment(
     const found = local.find((a) => a.id === id) || { ...DEFAULT_SAMPLE_APPOINTMENTS[0], id };
     const updated: Appointment = {
       ...found,
-      status: "PENDING_APPROVAL",
+      status: "PENDING_RECEPTIONIST_APPROVAL",
       updatedAt: new Date().toISOString(),
     };
     saveLocalAppointment(updated);
