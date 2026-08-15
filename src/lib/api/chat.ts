@@ -477,7 +477,7 @@ export async function createChatSession(title?: string): Promise<ChatSession> {
 export async function listChatSessions(limit = 20): Promise<ChatSession[]> {
   try {
     const raw = await apiRequest<unknown>(`/api/v1/chat/sessions?limit=${limit}`);
-    return list(mapChatSession)(raw);
+    return list(raw, mapChatSession);
   } catch {
     return [];
   }
@@ -486,7 +486,7 @@ export async function listChatSessions(limit = 20): Promise<ChatSession[]> {
 export async function listChatMessages(sessionId: string): Promise<ChatMessage[]> {
   try {
     const raw = await apiRequest<unknown>(`/api/v1/chat/sessions/${encodeURIComponent(sessionId)}/messages`);
-    return list(mapChatMessage)(raw);
+    return list(raw, mapChatMessage);
   } catch {
     return [];
   }
