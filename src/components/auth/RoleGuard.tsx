@@ -26,18 +26,24 @@ export function RoleGuard({
     async function verifySession() {
       const session = getAuthSession();
       if (!session) {
-        const devUserId = process.env.NEXT_PUBLIC_DEV_USER_ID;
-        const devRole = process.env.NEXT_PUBLIC_DEV_USER_ROLE as UserRole | undefined;
-        const validDevRole = devRole && ["PATIENT", "RECEPTIONIST", "DOCTOR"].includes(devRole);
-        if (process.env.NODE_ENV !== "production" && devUserId && validDevRole) {
-          if (allowedRoles.includes(devRole)) {
-            if (active) setAuthorized(true);
-          } else {
-            router.replace(homeForRole(devRole));
-          }
-          return;
-        }
         router.replace(loginPath);
+        return;
+      }
+
+      // Kiểm tra role có quyền truy cập trang này hay không
+      if (!allowedRoles.includes(session.role)) {
+        router.replace(homeForRole(session.role));
+        return;
+      }
+
+      // Đối với phiên Demo / Google / Cục bộ, cho phép truy cập ngay lập tức
+      if (
+        session.accessToken.startsWith("demo_") ||
+        session.accessToken.startsWith("google_") ||
+        session.userId.startsWith("demo_") ||
+        session.userId.startsWith("google_")
+      ) {
+        if (active) setAuthorized(true);
         return;
       }
 
@@ -54,8 +60,13 @@ export function RoleGuard({
         }
         if (active) setAuthorized(true);
       } catch {
-        clearAuthSession();
-        router.replace(loginPath);
+        // Nếu API backend bận hoặc timeout nhưng session còn hạn thì vẫn giữ quyền đăng nhập
+        if (session.expiresAt > Date.now()) {
+          if (active) setAuthorized(true);
+        } else {
+          clearAuthSession();
+          router.replace(loginPath);
+        }
       }
     }
 

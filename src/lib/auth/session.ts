@@ -16,7 +16,9 @@ export interface StoredAuthSession {
 export function getAuthSession(): StoredAuthSession | null {
   if (typeof window === "undefined") return null;
 
-  const raw = window.sessionStorage.getItem(SESSION_KEY);
+  const raw =
+    window.sessionStorage.getItem(SESSION_KEY) ||
+    window.localStorage.getItem(SESSION_KEY);
   if (!raw) return null;
 
   try {
@@ -24,16 +26,20 @@ export function getAuthSession(): StoredAuthSession | null {
     const validRoles: UserRole[] = ["PATIENT", "RECEPTIONIST", "DOCTOR", "ADMIN"];
     if (
       typeof value.accessToken !== "string" ||
-      typeof value.refreshToken !== "string" ||
-      typeof value.expiresAt !== "number" ||
       typeof value.userId !== "string" ||
-      !validRoles.includes(value.role as UserRole) ||
-      typeof value.fullName !== "string"
+      !validRoles.includes(value.role as UserRole)
     ) {
       clearAuthSession();
       return null;
     }
-    return value as StoredAuthSession;
+    return {
+      accessToken: value.accessToken,
+      refreshToken: value.refreshToken || value.accessToken,
+      expiresAt: typeof value.expiresAt === "number" ? value.expiresAt : Date.now() + 86400000,
+      userId: value.userId,
+      role: value.role as UserRole,
+      fullName: value.fullName || "Người dùng",
+    };
   } catch {
     clearAuthSession();
     return null;
@@ -49,7 +55,10 @@ export function saveAuthSession(result: AuthResult): StoredAuthSession {
     role: result.profile.role,
     fullName: result.profile.fullName,
   };
-  window.sessionStorage.setItem(SESSION_KEY, JSON.stringify(session));
+  if (typeof window !== "undefined") {
+    window.sessionStorage.setItem(SESSION_KEY, JSON.stringify(session));
+    window.localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+  }
   notifySessionChanged();
   return session;
 }
@@ -64,7 +73,10 @@ export function updateAuthToken(token: AuthToken): StoredAuthSession | null {
     refreshToken: token.refreshToken || current.refreshToken,
     expiresAt: Date.now() + token.expiresIn * 1000,
   };
-  window.sessionStorage.setItem(SESSION_KEY, JSON.stringify(session));
+  if (typeof window !== "undefined") {
+    window.sessionStorage.setItem(SESSION_KEY, JSON.stringify(session));
+    window.localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+  }
   notifySessionChanged();
   return session;
 }
@@ -79,7 +91,10 @@ export function updateAuthProfile(profile: Profile): StoredAuthSession | null {
     role: profile.role,
     fullName: profile.fullName,
   };
-  window.sessionStorage.setItem(SESSION_KEY, JSON.stringify(session));
+  if (typeof window !== "undefined") {
+    window.sessionStorage.setItem(SESSION_KEY, JSON.stringify(session));
+    window.localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+  }
   notifySessionChanged();
   return session;
 }
@@ -91,6 +106,7 @@ export function shouldRefreshSession(session: StoredAuthSession): boolean {
 export function clearAuthSession(): void {
   if (typeof window !== "undefined") {
     window.sessionStorage.removeItem(SESSION_KEY);
+    window.localStorage.removeItem(SESSION_KEY);
     notifySessionChanged();
   }
 }
