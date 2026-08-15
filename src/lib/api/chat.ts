@@ -180,7 +180,7 @@ export async function sendChatMessage(
       },
       workflowState: "SPECIALTY_RECOMMENDED",
       missingFields: [],
-      availableActions: ["PROCEED_TO_BOOKING", "MODIFY_SPECIALTY", "ASK_CLARIFICATION"],
+      availableActions: ["ACCEPT_APPOINTMENT", "CHANGE_APPOINTMENT", "CONFIRM_TRIAGE"],
       appointmentOffer: mockOffer,
       appointmentOffers: [mockOffer],
     };
@@ -203,7 +203,7 @@ export async function sendChatAction(
     return {
       replyText: "Đã ghi nhận yêu cầu của bạn và giữ chỗ thành công.",
       workflowState: "SLOT_SELECTED",
-      availableActions: ["CONFIRM_BOOKING"],
+      availableActions: ["ACCEPT_APPOINTMENT"],
       appointmentOffer: null,
       appointmentOffers: [],
       checkout: null,
