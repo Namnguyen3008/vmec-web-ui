@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { getGoogleOAuthUrl } from "@/lib/auth/googleOAuthFlow";
 import type { AuthResult } from "@/lib/api/contracts";
 
 interface GoogleSignInButtonProps {
@@ -22,7 +23,14 @@ export function GoogleSignInButton({
       : "Đăng nhập bằng Google";
 
   function handleClick() {
-    router.push("/auth/google");
+    const hasClientId = !!process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
+    if (hasClientId) {
+      // Chuyển hướng trực tiếp lên máy chủ thật của Google: accounts.google.com
+      window.location.href = getGoogleOAuthUrl();
+    } else {
+      // Điều hướng đến trang xác thực Google v3 chuẩn
+      router.push("/auth/google");
+    }
   }
 
   return (
