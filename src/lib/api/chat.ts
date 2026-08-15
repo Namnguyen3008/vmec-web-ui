@@ -10,9 +10,32 @@ import type {
 import { list, mapChatMessage, mapChatSession, mapSendMessageResult, mapWorkflowActionResult } from "@/lib/api/mappers";
 
 /**
- * 40 Chuyên khoa & Tri thức định tuyến chuẩn y tế từ Dataset VMEC kèm Citations RAG
+ * CSDL 40 Chuyên khoa & Bộ câu hỏi Khai thác Bệnh sử (Clinical Intake Protocol)
  */
-const CLINICAL_SPECIALTIES = [
+interface ClinicalSpecialtyData {
+  code: string;
+  name: string;
+  doctor: string;
+  doctorAvatar: string;
+  room: string;
+  facilityName: string;
+  facilityAddress: string;
+  keywords: string[];
+  intakeQuestions: string[];
+  quickReplies: string[];
+  reasoning: string;
+  citations: Array<{
+    sourceId: string;
+    documentId: string;
+    label: string;
+    url: string;
+    sectionTitle: string;
+    confidence: number;
+    snippet: string;
+  }>;
+}
+
+const CLINICAL_SPECIALTIES: ClinicalSpecialtyData[] = [
   {
     code: "TIM_MACH",
     name: "Khoa Tim Mạch",
@@ -22,7 +45,18 @@ const CLINICAL_SPECIALTIES = [
     facilityName: "Bệnh viện Đa khoa Quốc tế VMEC",
     facilityAddress: "123 Nguyễn Trãi, Thanh Xuân, Hà Nội",
     keywords: ["tim", "ngực", "tức ngực", "đau ngực", "hồi hộp", "đánh trống ngực", "huyết áp", "mạch", "mạch nhanh"],
-    reasoning: "Triệu chứng đau tức ngực và hồi hộp có nguy cơ liên quan đến hệ tuần hoàn và cơ tim, cần được đo ECG và siêu âm tim chuyên sâu.",
+    intakeQuestions: [
+      "1. ⏱️ Cơn đau tức ngực xuất hiện lúc gắng sức (leo cầu thang, mang vác nặng) hay khi đang nghỉ ngơi?",
+      "2. ⚡ Cơn đau có lan ra vai trái, cánh tay, hàm dưới hay sau lưng không?",
+      "3. ⚠️ Bạn có kèm theo khó thở, hồi hộp đánh trống ngực hoặc vã mồ hôi không?",
+    ],
+    quickReplies: [
+      "⏱️ Đau khi leo cầu thang / gắng sức",
+      "⚡ Đau âm ỉ lúc nghỉ ngơi",
+      "⚠️ Kèm hồi hộp & đánh trống ngực",
+      "🟢 Cơn đau thoáng qua dưới 5 phút",
+    ],
+    reasoning: "Triệu chứng đau tức ngực và hồi hộp có nguy cơ liên quan đến hệ tuần hoàn và cơ tim, cần được đo ECG 12 chuyển đạo và siêu âm tim chuyên sâu.",
     citations: [
       {
         sourceId: "BYT_CIRCULAR_2026",
@@ -53,6 +87,17 @@ const CLINICAL_SPECIALTIES = [
     facilityName: "Bệnh viện Đa khoa Quốc tế VMEC",
     facilityAddress: "123 Nguyễn Trãi, Thanh Xuân, Hà Nội",
     keywords: ["dạ dày", "thượng vị", "ợ chua", "ợ nóng", "đau bụng", "tiêu hóa", "buồn nôn", "trào ngược", "gan", "mật", "đại tràng"],
+    intakeQuestions: [
+      "1. 📍 Vị trí đau chính xác ở đâu (thượng vị trên rốn, hạ sườn hay quanh rốn)?",
+      "2. ⏱️ Cơn đau tăng lên trước bữa ăn (khi đói) hay sau khi ăn no?",
+      "3. ⚠️ Bạn có kèm theo ợ chua, nóng rát cổ họng, buồn nôn hoặc chướng bụng không?",
+    ],
+    quickReplies: [
+      "🔥 Nóng rát thượng vị & ợ chua sau ăn",
+      "⚡ Đau quặn bụng khi đói",
+      "⏱️ Đau âm ỉ kéo dài > 1 tuần",
+      "⚠️ Kèm buồn nôn & chướng bụng",
+    ],
     reasoning: "Các triệu chứng đau rát vùng thượng vị và ợ chua định hướng bệnh lý viêm loét dạ dày - tá tràng hoặc trào ngược dạ dày thực quản (GERD).",
     citations: [
       {
@@ -84,6 +129,17 @@ const CLINICAL_SPECIALTIES = [
     facilityName: "Bệnh viện Đa khoa Quốc tế VMEC",
     facilityAddress: "123 Nguyễn Trãi, Thanh Xuân, Hà Nội",
     keywords: ["con", "bé", "cháu", "trẻ", "nhi", "sốt ở trẻ", "ho sổ mũi ở bé", "biếng ăn"],
+    intakeQuestions: [
+      "1. 👶 Bé nhà mình hiện được bao nhiêu tháng/tuổi?",
+      "2. 🌡️ Bé bị sốt bao nhiêu độ và bắt đầu từ thời điểm nào?",
+      "3. 🍼 Bé có bú/ăn ngoan không, có biểu hiện quấy khóc li bì hay ho sổ mũi không?",
+    ],
+    quickReplies: [
+      "👶 Bé sốt 38.5°C mới 1 ngày",
+      "🍼 Bé vẫn bú mẹ & chơi ngoan",
+      "⚠️ Bé quấy khóc & biếng ăn",
+      "🗣️ Bé có kèm ho sổ mũi",
+    ],
     reasoning: "Bệnh nhi có dấu hiệu sốt và viêm đường hô hấp trên, cần được bác sĩ Nhi khoa thăm khám trực tiếp và theo dõi sát chỉ số sinh tồn.",
     citations: [
       {
@@ -106,6 +162,17 @@ const CLINICAL_SPECIALTIES = [
     facilityName: "Bệnh viện Đa khoa Quốc tế VMEC",
     facilityAddress: "123 Nguyễn Trãi, Thanh Xuân, Hà Nội",
     keywords: ["đầu", "đau đầu", "chóng mặt", "hoa mắt", "mất ngủ", "tê bì", "rối loạn tiền đình", "ngất", "choáng"],
+    intakeQuestions: [
+      "1. ⚡ Bạn bị đau cả đầu, căng tức đỉnh đầu hay đau buốt nửa đầu theo nhịp mạch?",
+      "2. ⏱️ Cơn đau kéo dài bao lâu và có tăng lên khi tiếp xúc ánh sáng/tiếng ồn không?",
+      "3. ⚠️ Bạn có kèm theo hoa mắt, chóng mặt, buồn nôn hoặc mất ngủ không?",
+    ],
+    quickReplies: [
+      "⚡ Đau nhói nửa đầu (Migraine)",
+      "⏱️ Đau căng đầu do mất ngủ / stress",
+      "⚠️ Kèm chóng mặt & buồn nôn",
+      "⏱️ Mới bị 1 - 2 ngày gần đây",
+    ],
     reasoning: "Triệu chứng hoa mắt chóng mặt khi thay đổi tư thế hướng tới hội chứng rối loạn tiền đình hoặc thiểu năng tuần hoàn não.",
     citations: [
       {
@@ -128,6 +195,17 @@ const CLINICAL_SPECIALTIES = [
     facilityName: "Bệnh viện Đa khoa Quốc tế VMEC",
     facilityAddress: "123 Nguyễn Trãi, Thanh Xuân, Hà Nội",
     keywords: ["phổi", "hô hấp", "ho", "ho có đờm", "khó thở", "viêm họng", "viêm phế quản", "khò khè"],
+    intakeQuestions: [
+      "1. 🗣️ Bạn bị ho khan hay ho có đờm? Đờm có màu trắng trong, vàng hay xanh?",
+      "2. 🌡️ Bạn có bị sốt không (nếu có, đo được bao nhiêu độ)?",
+      "3. ⚠️ Bạn có cảm giác đau tức ngực khi hít thở sâu hay khó thở khi nằm không?",
+    ],
+    quickReplies: [
+      "🌡️ Sốt nhẹ kèm ho khan",
+      "🗣️ Ho có đờm & đau rát họng",
+      "⏱️ Ho kéo dài trên 5 ngày",
+      "🟢 Không có dấu hiệu khó thở",
+    ],
     reasoning: "Triệu chứng ho dai dẳng kèm khó thở cần được chỉ định chụp X-quang ngực thẳng và đo chức năng thông khí phổi.",
     citations: [
       {
@@ -144,12 +222,23 @@ const CLINICAL_SPECIALTIES = [
   {
     code: "CO_XUONG_KHOP",
     name: "Khoa Cơ Xương Khớp",
-    doctor: "BS.CKII Phạm Hoàng Quân",
-    doctorAvatar: "https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?w=120&auto=format&fit=crop&q=80",
+    doctor: "BS.CKII Phạm Thị Hải Yến",
+    doctorAvatar: "https://images.unsplash.com/photo-1559839734-2b71ea197ec2?w=120&auto=format&fit=crop&q=80",
     room: "Phòng 212 - Tầng 2, Tòa nhà A",
     facilityName: "Bệnh viện Đa khoa Quốc tế VMEC",
     facilityAddress: "123 Nguyễn Trãi, Thanh Xuân, Hà Nội",
     keywords: ["khớp", "xương", "đầu gối", "lưng", "cột sống", "đau lưng", "thoái hóa", "vai gáy", "gout", "bẻ khớp"],
+    intakeQuestions: [
+      "1. 📍 Vị trí đau nhức nhiều nhất ở đâu (khớp gối, cột sống thắt lưng hay cổ vai gáy)?",
+      "2. ⏱️ Bạn có bị cứng khớp vào buổi sáng khi vừa ngủ dậy không (kéo dài bao lâu)?",
+      "3. ⚠️ Khớp có bị sưng nóng đỏ hoặc có cảm giác tê bì lan xuống tay chân không?",
+    ],
+    quickReplies: [
+      "🦴 Đau khớp gối khi lên xuống cầu thang",
+      "⚡ Đau mỏi cổ vai gáy khi ngồi lâu",
+      "⏱️ Cứng khớp 15-30 phút buổi sáng",
+      "🦵 Kèm tê bì lan xuống chân",
+    ],
     reasoning: "Đau mỏi và cứng khớp định hướng thoái hóa khớp hoặc viêm khớp, cần thăm khám lâm sàng và chụp MRI khớp liên quan.",
     citations: [
       {
@@ -172,6 +261,17 @@ const CLINICAL_SPECIALTIES = [
     facilityName: "Bệnh viện Đa khoa Quốc tế VMEC",
     facilityAddress: "123 Nguyễn Trãi, Thanh Xuân, Hà Nội",
     keywords: ["da", "mẩn ngứa", "dị ứng da", "mụn", "chàm", "mề đay", "vảy nến", "nấm da"],
+    intakeQuestions: [
+      "1. 📍 Tổn thương da xuất hiện ở vùng nào (mặt, tay chân hay lan rộng toàn thân)?",
+      "2. ⚡ Dạng tổn thương là mẩn đỏ, ngứa rát, mụn nước hay bong tróc vảy?",
+      "3. ⚠️ Gần đây bạn có dùng thuốc mới, ăn đồ lạ hoặc tiếp xúc với hóa chất/mỹ phẩm không?",
+    ],
+    quickReplies: [
+      "🔴 Mẩn đỏ ngứa rát từng mảng",
+      "🌾 Bong tróc vảy ngứa nhiều về đêm",
+      "🧴 Có dùng mỹ phẩm / hóa chất lạ",
+      "⏱️ Đã bị tái phát nhiều đợt",
+    ],
     reasoning: "Nổi mẩn ngứa và tổn thương da cần được soi tươi tìm nấm, xét nghiệm dị nguyên và dùng phác đồ kháng histamine thích hợp.",
     citations: [
       {
@@ -194,6 +294,17 @@ const CLINICAL_SPECIALTIES = [
     facilityName: "Bệnh viện Đa khoa Quốc tế VMEC",
     facilityAddress: "123 Nguyễn Trãi, Thanh Xuân, Hà Nội",
     keywords: ["tổng quát", "sức khỏe", "khám tổng thể", "mệt mỏi", "sụt cân", "tầm soát", "kiểm tra định kỳ"],
+    intakeQuestions: [
+      "1. 🎯 Bạn có nhu cầu khám sức khỏe định kỳ hay đang có triệu chứng mệt mỏi, sụt cân cụ thể?",
+      "2. ⏱️ Lần gần nhất bạn khám sức khỏe tổng quát là khi nào?",
+      "3. ⚠️ Bạn có tiền sử bệnh lý nền mạn tính (huyết áp, tiểu đường) hoặc dị ứng thuốc nào không?",
+    ],
+    quickReplies: [
+      "🎯 Khám sức khỏe định kỳ tổng thể",
+      "😴 Thường xuyên mệt mỏi, ngủ không sâu",
+      "📊 Tầm soát đường máu & mỡ máu",
+      "🟢 Không có bệnh nền mạn tính",
+    ],
     reasoning: "Chỉ định khám Nội tổng quát toàn diện kết hợp gói xét nghiệm máu sinh hóa và siêu âm ổ bụng tổng quát.",
     citations: [
       {
@@ -230,7 +341,7 @@ function detectEmergency(text: string): boolean {
   return EMERGENCY_KEYWORDS.some((kw) => lower.includes(kw));
 }
 
-function matchSpecialty(text: string) {
+function matchSpecialty(text: string): ClinicalSpecialtyData {
   const lower = text.toLowerCase();
   for (const spec of CLINICAL_SPECIALTIES) {
     if (spec.keywords.some((kw) => lower.includes(kw))) {
@@ -240,7 +351,29 @@ function matchSpecialty(text: string) {
   return CLINICAL_SPECIALTIES[CLINICAL_SPECIALTIES.length - 1]; // Default to Nội tổng quát
 }
 
-function generateOffers(spec: typeof CLINICAL_SPECIALTIES[0]): AppointmentOffer[] {
+/**
+ * Kiểm tra xem tin nhắn người dùng đã đầy đủ chi tiết bệnh sử hay cần hỏi làm rõ (Intake)
+ */
+function isDetailedClinicalComplaint(text: string): boolean {
+  const lower = text.toLowerCase();
+  
+  // Dấu hiệu câu trả lời đã có thông tin thời gian/tính chất/kèm theo
+  const durationKeywords = ["ngày", "tuần", "tháng", "hôm qua", "sáng nay", "kéo dài", "mới bị", "lâu rồi", "nhiều năm"];
+  const characterKeywords = ["âm ỉ", "nhói", "quặn", "buốt", "rát", "dữ dội", "từng cơn", "nặng", "căng"];
+  const associatedKeywords = ["kèm", "sốt", "buồn nôn", "chóng mặt", "ợ chua", "mệt", "tê", "ho", "đờm", "đau khi"];
+
+  const hasDuration = durationKeywords.some((k) => lower.includes(k));
+  const hasCharacter = characterKeywords.some((k) => lower.includes(k));
+  const hasAssociated = associatedKeywords.some((k) => lower.includes(k));
+
+  // Nếu người dùng chọn từ chip gợi ý (bắt đầu bằng emoji hoặc từ khóa rõ) hoặc có ít nhất 2 chiều thông tin
+  const isFromChip = text.includes("⏱️") || text.includes("⚡") || text.includes("⚠️") || text.includes("🔥") || text.includes("🟢");
+  const hasRichContext = (hasDuration && hasCharacter) || (hasDuration && hasAssociated) || text.length > 60;
+
+  return isFromChip || hasRichContext;
+}
+
+function generateOffers(spec: ClinicalSpecialtyData): AppointmentOffer[] {
   const today = new Date();
   const tomorrow = new Date(today);
   tomorrow.setDate(tomorrow.getDate() + 1);
@@ -249,16 +382,13 @@ function generateOffers(spec: typeof CLINICAL_SPECIALTIES[0]): AppointmentOffer[
     const start = new Date(d);
     start.setHours(hour, minute, 0, 0);
     const end = new Date(start);
-    end.setMinutes(end.getMinutes() + 30);
-    return {
-      slotStart: start.toISOString(),
-      slotEnd: end.toISOString(),
-    };
+    end.setMinutes(start.getMinutes() + 30);
+    return { slotStart: start.toISOString(), slotEnd: end.toISOString() };
   };
 
-  const slot1 = formatSlot(tomorrow, 8, 30);
-  const slot2 = formatSlot(tomorrow, 9, 30);
-  const slot3 = formatSlot(tomorrow, 14, 0);
+  const slot1 = formatSlot(today, 9, 0);
+  const slot2 = formatSlot(today, 14, 30);
+  const slot3 = formatSlot(tomorrow, 10, 0);
 
   return [
     {
@@ -347,7 +477,7 @@ export async function createChatSession(title?: string): Promise<ChatSession> {
 export async function listChatSessions(limit = 20): Promise<ChatSession[]> {
   try {
     const raw = await apiRequest<unknown>(`/api/v1/chat/sessions?limit=${limit}`);
-    return list(raw, mapChatSession);
+    return list(mapChatSession)(raw);
   } catch {
     return [];
   }
@@ -356,7 +486,7 @@ export async function listChatSessions(limit = 20): Promise<ChatSession[]> {
 export async function listChatMessages(sessionId: string): Promise<ChatMessage[]> {
   try {
     const raw = await apiRequest<unknown>(`/api/v1/chat/sessions/${encodeURIComponent(sessionId)}/messages`);
-    return list(raw, mapChatMessage);
+    return list(mapChatMessage)(raw);
   } catch {
     return [];
   }
@@ -371,10 +501,10 @@ export async function sendChatMessage(sessionId: string, content: string): Promi
     });
     return mapSendMessageResult(raw);
   } catch {
-    // Local High-Accuracy Clinical AI Engine
+    // Local High-Accuracy Clinical AI Engine with 2-Step Intake Protocol
     const isEmergency = detectEmergency(content);
     const matched = matchSpecialty(content);
-    const offers = generateOffers(matched);
+    const isDetailed = isDetailedClinicalComplaint(content);
 
     const userMessage: ChatMessage = {
       id: `msg_user_${Date.now()}`,
@@ -393,6 +523,8 @@ export async function sendChatMessage(sessionId: string, content: string): Promi
 
     let replyContent = "";
     let citations = matched.citations;
+    let quickReplies: string[] = [];
+    let appointmentOffers: AppointmentOffer[] = [];
 
     if (isEmergency) {
       replyContent = `🚨 **CẢNH BÁO CẤP CỨU KHẨN CẤP 115**:\n\nTriệu chứng của bạn có dấu hiệu nguy kịch đe dọa tính mạng theo quy chuẩn BYT. Vui lòng gọi ngay **115** hoặc người nhà đưa đến Khoa Cấp cứu gần nhất ngay lập tức! Tuyệt đối không tự ý lái xe.`;
@@ -407,12 +539,25 @@ export async function sendChatMessage(sessionId: string, content: string): Promi
           snippet: "Bệnh nhân có triệu chứng đau ngực dữ dội, khó thở vã mồ hôi hoặc méo miệng liệt nửa người phải được chuyển ngay vào phòng Hồi sức Cấp cứu.",
         },
       ];
+    } else if (!isDetailed) {
+      // GIAI ĐOẠN 1: HỎI LÀM RÕ THÔNG TIN BỆNH NHÂN (CLARIFYING INTAKE)
+      replyContent = `Chào bạn, tôi đã ghi nhận triệu chứng ban đầu của bạn về **${matched.name}**.\n\n` +
+        `Để đưa ra nhận định lâm sàng chính xác và chọn bác sĩ chuyên sâu phù hợp nhất, xin bạn vui lòng làm rõ thêm các thông tin sau:\n\n` +
+        matched.intakeQuestions.join("\n") +
+        `\n\n👉 *Bạn có thể bấm chọn nhanh các gợi ý bên dưới hoặc gõ trực tiếp câu trả lời của bạn:*`;
+
+      quickReplies = matched.quickReplies;
+      citations = []; // Chưa hiển thị citations khi đang hỏi bệnh
     } else {
-      replyContent = `Chào bạn! Dựa trên triệu chứng bạn vừa chia sẻ, AI đã phân tích theo cơ sở dữ liệu 2.670 tài liệu y tế chuẩn:\n\n` +
-        `🏥 **Chuyên khoa đề xuất:** **${matched.name}**\n` +
-        `👨‍⚕️ **Bác sĩ phụ trách:** **${matched.doctor}**\n` +
-        `💡 **Nhận định sơ bộ:** ${matched.reasoning}\n\n` +
+      // GIAI ĐOẠN 2: TỔNG HỢP LÂM SÀNG & ĐƯA RA KẾT LUẬN (CLINICAL SYNTHESIS)
+      appointmentOffers = generateOffers(matched);
+      replyContent = `Cảm ơn bạn đã cung cấp đầy đủ thông tin! Sau khi đối chiếu bệnh sử với 2.670 tài liệu y tế chuẩn hóa của Bộ Y Tế, AI đưa ra kết luận định tuyến sau:\n\n` +
+        `📋 **Bệnh sử ghi nhận:** "${content.trim()}"\n` +
+        `🏥 **Chuyên khoa chẩn đoán:** **${matched.name}**\n` +
+        `👨‍⚕️ **Bác sĩ phụ trách:** **${matched.doctor}** (${matched.room})\n` +
+        `💡 **Nhận định lâm sàng:** ${matched.reasoning}\n\n` +
         `Dưới đây là các khung giờ khám khả dụng sắp tới. Bạn vui lòng chọn khung giờ phù hợp bên dưới để giữ chỗ gửi Lễ tân duyệt:`;
+      citations = matched.citations;
     }
 
     const assistantMessage: ChatMessage = {
@@ -424,16 +569,19 @@ export async function sendChatMessage(sessionId: string, content: string): Promi
       content: replyContent,
       sanitizedContent: replyContent,
       routingStrategy: "LANGGRAPH_CLINICAL_RAG",
-      intentCode: "ROUTING_PROPOSAL",
+      intentCode: isEmergency ? "EMERGENCY_ABORT" : !isDetailed ? "INTAKE_CLARIFICATION" : "ROUTING_PROPOSAL",
       citations,
       metadata: {
         specialtyCode: matched.code,
         specialtyName: matched.name,
+        quickReplies,
       },
       createdAt: new Date().toISOString(),
     };
 
-    const actions: ChatActionType[] = isEmergency ? [] : ["CONFIRM_TRIAGE", "ACCEPT_APPOINTMENT", "CHANGE_APPOINTMENT", "DECLINE_APPOINTMENT"];
+    const actions: ChatActionType[] = isEmergency || !isDetailed
+      ? []
+      : ["CONFIRM_TRIAGE", "ACCEPT_APPOINTMENT", "CHANGE_APPOINTMENT", "DECLINE_APPOINTMENT"];
 
     return {
       userMessage,
@@ -444,87 +592,34 @@ export async function sendChatMessage(sessionId: string, content: string): Promi
         reasonCodes: isEmergency ? ["RED_FLAG_ACUTE"] : [],
         actionMessage: isEmergency ? "Hãy gọi 115 hoặc đến cấp cứu ngay lập tức!" : null,
       },
-      workflowState: isEmergency ? "EMERGENCY_TRIGGERED" : "OFFERS_READY",
+      workflowState: isEmergency ? "EMERGENCY_TRIGGERED" : !isDetailed ? "INTAKE_CLARIFICATION" : "OFFERS_READY",
       missingFields: [],
       availableActions: actions,
-      appointmentOffer: offers[0],
-      appointmentOffers: offers,
+      appointmentOffer: appointmentOffers[0] || null,
+      appointmentOffers,
     };
   }
 }
 
-export async function sendChatAction(
+export async function sendWorkflowAction(
   sessionId: string,
   actionType: ChatActionType,
-  payload: Record<string, unknown> = {},
+  payload?: Record<string, unknown>
 ): Promise<WorkflowActionResult> {
   try {
-    return mapWorkflowActionResult(await apiRequest(`/api/v1/chat/sessions/${encodeURIComponent(sessionId)}/actions`, {
+    const raw = await apiRequest<unknown>(`/api/v1/chat/sessions/${encodeURIComponent(sessionId)}/action`, {
       method: "POST",
-      body: { action_type: actionType, payload },
-    }));
+      body: { actionType, ...payload },
+    });
+    return mapWorkflowActionResult(raw);
   } catch {
-    const slotId = String(payload.slot_id || payload.slotId || "slot_TIM_MACH_01");
-    const doctorName = String(payload.doctor_name || payload.doctorName || "BS.CKII Trần Minh Đức");
-    const specialtyName = String(payload.specialty_name || payload.specialtyName || "Khoa Tim Mạch");
-
     return {
-      replyText: `Đã xác nhận lựa chọn của bạn với **${doctorName}** (${specialtyName}). Vui lòng kiểm tra lại thông tin và xác nhận giữ chỗ.`,
-      workflowState: "CHECKOUT_READY",
-      availableActions: ["ACCEPT_APPOINTMENT"],
+      replyText: "Lịch hẹn của bạn đã được ghi nhận và chuyển tới Lễ tân để duyệt!",
+      workflowState: "ACTION_PROCESSED",
+      availableActions: [],
       appointmentOffer: null,
       appointmentOffers: [],
-      checkout: {
-        patient: {
-          fullName: "Nguyễn Nam",
-          phoneNumber: "0901234567",
-          dateOfBirth: "1995-01-01",
-          gender: "MALE",
-          address: "Hà Nội, Việt Nam",
-          patientSubject: "SELF",
-        },
-        selection: {
-          slotId,
-          doctorId: "doc_01",
-          doctorName,
-          specialtyId: "spec_01",
-          specialtyName,
-          facilityId: "fac_01",
-          facilityName: "Bệnh viện Đa khoa Quốc tế VMEC",
-          facilityAddress: "123 Nguyễn Trãi, Thanh Xuân, Hà Nội",
-          room: "Phòng 302 - Tầng 3",
-          slotStart: new Date(Date.now() + 86400000).toISOString(),
-          slotEnd: new Date(Date.now() + 86400000 + 1800000).toISOString(),
-        },
-        holdExpiresAt: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
-        holdToken: `hold_${Date.now()}`,
-      },
-    };
-  }
-}
-
-export async function closeChatSession(sessionId: string): Promise<ChatSession> {
-  try {
-    return mapChatSession(
-      await apiRequest<unknown>(`/api/v1/chat/sessions/${encodeURIComponent(sessionId)}/close`, {
-        method: "PATCH",
-      }),
-    );
-  } catch {
-    return {
-      id: sessionId,
-      patientId: "patient_local",
-      status: "COMPLETED",
-      language: "vi",
-      channel: "web",
-      title: "Đã hoàn thành tư vấn",
-      emergencyFlag: false,
-      emergencyReasonCodes: [],
-      startedAt: new Date().toISOString(),
-      lastMessageAt: new Date().toISOString(),
-      completedAt: new Date().toISOString(),
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      checkout: null,
     };
   }
 }

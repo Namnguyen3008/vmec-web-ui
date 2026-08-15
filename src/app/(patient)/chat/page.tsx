@@ -29,6 +29,7 @@ interface UiMessage {
   content: string;
   citations?: CitationItem[];
   confidenceScore?: number;
+  quickReplies?: string[];
   appointmentQr?: { appointmentId: string; appointmentCode: string | null };
 }
 
@@ -36,22 +37,22 @@ const QUICK_PROMPTS = [
   {
     icon: <HeartPulse className="text-danger" size={16} />,
     title: "Đau ngực trái",
-    text: "Tôi bị đau tức ngực trái khi leo cầu thang, kèm cảm giác hồi hộp kéo dài 2 ngày.",
+    text: "Tôi bị tức ngực",
   },
   {
     icon: <Activity className="text-warning-800" size={16} />,
     title: "Đau dạ dày / ợ chua",
-    text: "Tôi bị đau rát vùng thượng vị 3 ngày nay, ợ chua nhiều sau khi ăn đồ cay nóng.",
+    text: "Tôi bị đau dạ dày",
   },
   {
     icon: <Baby className="text-primary-700" size={16} />,
     title: "Khám Nhi khoa",
-    text: "Con tôi 4 tuổi bị sốt nhẹ 38.5°C kèm ho hắng hắt hơi 2 ngày nay.",
+    text: "Con tôi bị sốt",
   },
   {
     icon: <Stethoscope className="text-primary-600" size={16} />,
     title: "Chóng mặt / Hoa mắt",
-    text: "Tôi hay bị hoa mắt chóng mặt khi đứng dậy đột ngột, thỉnh thoảng cảm giác quay mòn.",
+    text: "Tôi bị chóng mặt đau đầu",
   },
 ];
 
@@ -65,7 +66,10 @@ function toUiMessage(message: ChatMessage): UiMessage {
       ? splitOfferSection(message.content).advice
       : message.content,
     citations: message.citations,
-    confidenceScore: message.senderType === "AI" ? 90 : undefined,
+    confidenceScore: message.senderType === "AI" ? 95 : undefined,
+    quickReplies: Array.isArray(message.metadata?.quickReplies)
+      ? (message.metadata.quickReplies as string[])
+      : undefined,
     appointmentQr: message.messageType === "APPOINTMENT_QR" && typeof message.metadata.appointment_id === "string"
       ? {
           appointmentId: message.metadata.appointment_id,
@@ -386,7 +390,12 @@ export default function ChatPage() {
                 <UserBubble key={message.id}>{message.content}</UserBubble>
               ) : (
                 <Fragment key={message.id}>
-                  <AgentBubble citations={message.citations} confidenceScore={message.confidenceScore}>
+                  <AgentBubble
+                    citations={message.citations}
+                    confidenceScore={message.confidenceScore}
+                    quickReplies={message.quickReplies}
+                    onSelectQuickReply={(replyText) => void handleSend(replyText)}
+                  >
                     {message.content}
                   </AgentBubble>
                   {message.appointmentQr && (
