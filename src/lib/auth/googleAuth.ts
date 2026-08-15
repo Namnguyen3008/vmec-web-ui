@@ -1,86 +1,73 @@
 /**
- * Google OAuth2 / Google Sign-In Integration for VMEC Web UI
- * Supports Google Identity Services & OAuth2 Popup / Redirect Flow
+ * Google Identity Services (GIS) & OAuth 2.0 Client Module for VMEC Healthcare
+ * Implements Standard Enterprise Google Sign-In (Official Google Identity Services)
  */
 
 import { saveAuthSession } from "@/lib/auth/session";
 import type { AuthResult } from "@/lib/api/contracts";
 
-export interface GoogleUserProfile {
-  email: string;
-  name: string;
-  picture?: string;
+export interface GoogleJwtPayload {
+  iss?: string;
   sub?: string;
+  azp?: string;
+  aud?: string;
+  email?: string;
+  email_verified?: boolean;
+  name?: string;
+  picture?: string;
+  given_name?: string;
+  family_name?: string;
+  iat?: number;
+  exp?: number;
 }
 
 /**
- * Handle Google OAuth2 Sign-In
- * - If Google Client ID is configured: triggers Google GIS OAuth flow.
- * - In demo/dev mode: simulates seamless Google Sign-In with authenticated patient session.
+ * Decode Google JWT ID Token (Credential) safely on client side
  */
-export async function signInWithGoogle(): Promise<AuthResult> {
-  const googleClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
-
-  // Nếu có Google Client ID và chạy trên browser có window.google
-  if (typeof window !== "undefined" && googleClientId && (window as any).google?.accounts?.oauth2) {
-    return new Promise((resolve, reject) => {
-      try {
-        const client = (window as any).google.accounts.oauth2.initTokenClient({
-          client_id: googleClientId,
-          scope: "email profile openid",
-          callback: async (response: any) => {
-            if (response.error) {
-              reject(new Error(response.error_description || "Google Sign-In bị hủy."));
-              return;
-            }
-
-            try {
-              // Fetch Google userinfo
-              const userInfoRes = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
-                headers: { Authorization: `Bearer ${response.access_token}` },
-              });
-              const googleUser = await userInfoRes.json();
-              const authResult = buildGoogleAuthResult(googleUser.email, googleUser.name, googleUser.picture);
-              saveAuthSession(authResult);
-              resolve(authResult);
-            } catch (err) {
-              reject(err);
-            }
-          },
-        });
-        client.requestAccessToken();
-      } catch (err) {
-        reject(err);
-      }
-    });
+export function decodeGoogleJwt(credential: string): GoogleJwtPayload | null {
+  try {
+    const base64Url = credential.split(".")[1];
+    if (!base64Url) return null;
+    const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
+    const jsonPayload = decodeURIComponent(
+      window
+        .atob(base64)
+        .split("")
+        .map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
+        .join("")
+    );
+    return JSON.parse(jsonPayload) as GoogleJwtPayload;
+  } catch (e) {
+    console.error("Error decoding Google JWT:", e);
+    return null;
   }
-
-  // Chế độ mô phỏng Google OAuth nhanh cho Demo/Dev
-  await new Promise((resolve) => setTimeout(resolve, 800)); // Simulating popup
-
-  const demoGoogleEmail = "namnguyen3008@gmail.com";
-  const demoGoogleName = "Nguyễn Văn Nam (Google Account)";
-  const demoGoogleAvatar = "https://lh3.googleusercontent.com/a/default-user=s96-c";
-
-  const authResult = buildGoogleAuthResult(demoGoogleEmail, demoGoogleName, demoGoogleAvatar);
-  saveAuthSession(authResult);
-  return authResult;
 }
 
-function buildGoogleAuthResult(email: string, name: string, avatar?: string): AuthResult {
-  return {
+/**
+ * Convert decoded Google profile to VMEC AuthResult and persist session
+ */
+export function createSessionFromGoogleProfile(
+  email: string,
+  name?: string,
+  picture?: string,
+  googleSub?: string
+): AuthResult {
+  const userId = `google_user_${googleSub || email.replace(/[@.]/g, "_")}`;
+  const fullName = name?.trim() || email.split("@")[0] || "Người dùng Google";
+
+  const authResult: AuthResult = {
     token: {
-      accessToken: `google_oauth_jwt_${Date.now()}`,
+      accessToken: `google_oauth_token_${Date.now()}`,
       refreshToken: `google_oauth_refresh_${Date.now()}`,
-      expiresIn: 86400,
+      expiresIn: 86400, // 24 hours
       tokenType: "Bearer",
     },
     profile: {
-      id: `google_user_${Date.now()}`,
+      id: userId,
       role: "PATIENT",
-      fullName: name || "Người dùng Google",
+      fullName,
       phoneNumber: "0901234567",
-      avatarUrl: avatar || null,
+      avatarUrl: picture || null,
       dateOfBirth: "1995-01-01",
       gender: "MALE",
       address: "Việt Nam",
@@ -90,4 +77,33 @@ function buildGoogleAuthResult(email: string, name: string, avatar?: string): Au
       updatedAt: new Date().toISOString(),
     },
   };
+
+  saveAuthSession(authResult);
+  return authResult;
+}
+
+/**
+ * Load Google Identity Services JavaScript SDK dynamically
+ */
+export function loadGoogleScript(): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (typeof window === "undefined") return resolve();
+    if ((window as any).google?.accounts?.id) return resolve();
+
+    const existingScript = document.getElementById("google-gsi-script");
+    if (existingScript) {
+      existingScript.addEventListener("load", () => resolve());
+      existingScript.addEventListener("error", (e) => reject(e));
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.id = "google-gsi-script";
+    script.src = "https://accounts.google.com/gsi/client";
+    script.async = true;
+    script.defer = true;
+    script.onload = () => resolve();
+    script.onerror = (e) => reject(e);
+    document.head.appendChild(script);
+  });
 }

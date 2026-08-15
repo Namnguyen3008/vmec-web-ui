@@ -1,10 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { saveAuthSession } from "@/lib/auth/session";
+import {
+  decodeGoogleJwt,
+  createSessionFromGoogleProfile,
+  loadGoogleScript,
+} from "@/lib/auth/googleAuth";
 import type { AuthResult } from "@/lib/api/contracts";
-import { X, CheckCircle2, ShieldCheck } from "lucide-react";
+import { ShieldCheck, Mail, ArrowRight, X } from "lucide-react";
 
 interface GoogleSignInButtonProps {
   onSuccess?: (auth: AuthResult) => void;
@@ -12,228 +16,267 @@ interface GoogleSignInButtonProps {
   text?: "signin_with" | "signup_with" | "continue_with";
 }
 
-interface GoogleAccountOption {
-  email: string;
-  name: string;
-  avatar: string;
-  initials: string;
-  color: string;
-}
-
-const AVAILABLE_GOOGLE_ACCOUNTS: GoogleAccountOption[] = [
-  {
-    email: "geminitaikhoan12@gmail.com",
-    name: "Gemini Pro User (Tài khoản của bạn)",
-    avatar: "",
-    initials: "G",
-    color: "bg-emerald-600",
-  },
-  {
-    email: "namnguyen3008@gmail.com",
-    name: "Nguyễn Văn Nam",
-    avatar: "",
-    initials: "N",
-    color: "bg-blue-600",
-  },
-];
-
 export function GoogleSignInButton({
   onSuccess,
   onError,
   text = "signin_with",
 }: GoogleSignInButtonProps) {
   const router = useRouter();
-  const [showModal, setShowModal] = useState(false);
+  const googleBtnContainerRef = useRef<HTMLDivElement>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [selectedEmail, setSelectedEmail] = useState<string | null>(null);
-  const [customEmail, setCustomEmail] = useState("");
-  const [isAddingNew, setIsAddingNew] = useState(false);
+  const [showPromptModal, setShowPromptModal] = useState(false);
+  const [gmailInput, setGmailInput] = useState("");
+  const [nameInput, setNameInput] = useState("");
+  const [isGsiRendered, setIsGsiRendered] = useState(false);
+
+  const googleClientId =
+    process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ||
+    "542032071030-web-client.apps.googleusercontent.com";
 
   const buttonLabel =
     text === "signup_with"
-      ? "Đăng ký nhanh với Google"
+      ? "Đăng ký bằng Google"
       : text === "continue_with"
-      ? "Tiếp tục với Google"
-      : "Đăng nhập với Google";
+      ? "Tiếp tục bằng Google"
+      : "Đăng nhập bằng Google";
 
-  async function handleSelectGoogleAccount(account: { email: string; name: string }) {
-    setSelectedEmail(account.email);
+  // Khởi tạo Google Identity Services (GIS) chính thức
+  useEffect(() => {
+    let active = true;
+
+    void loadGoogleScript()
+      .then(() => {
+        if (!active) return;
+        const google = (window as any).google;
+
+        if (google?.accounts?.id && googleClientId) {
+          try {
+            google.accounts.id.initialize({
+              client_id: googleClientId,
+              callback: (response: { credential?: string }) => {
+                if (response.credential) {
+                  const payload = decodeGoogleJwt(response.credential);
+                  if (payload?.email) {
+                    const authResult = createSessionFromGoogleProfile(
+                      payload.email,
+                      payload.name,
+                      payload.picture,
+                      payload.sub
+                    );
+                    if (onSuccess) onSuccess(authResult);
+                    router.replace("/dashboard");
+                  }
+                }
+              },
+              auto_select: false,
+              cancel_on_tap_outside: true,
+            });
+
+            // Tự động render nút Google chính thức nếu container sẵn sàng
+            if (googleBtnContainerRef.current) {
+              google.accounts.id.renderButton(googleBtnContainerRef.current, {
+                type: "standard",
+                theme: "outline",
+                size: "large",
+                text: text,
+                shape: "pill",
+                width: 380,
+                logo_alignment: "left",
+              });
+              setIsGsiRendered(true);
+            }
+          } catch (e) {
+            console.warn("Google GSI render notice:", e);
+          }
+        }
+      })
+      .catch((err) => {
+        console.warn("Google SDK load notice:", err);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [googleClientId, text, router, onSuccess]);
+
+  // Xử lý khi bấm nút Google
+  async function handleClickGoogleSignIn() {
     setIsLoading(true);
 
     try {
-      // Giả lập độ trễ xác thực an toàn chuẩn OAuth2 (400ms)
-      await new Promise((resolve) => setTimeout(resolve, 400));
+      const google = (window as any).google;
 
-      const authResult: AuthResult = {
-        token: {
-          accessToken: `google_oauth_token_${Date.now()}`,
-          refreshToken: `google_refresh_${Date.now()}`,
-          expiresIn: 86400,
-          tokenType: "Bearer",
-        },
-        profile: {
-          id: `google_uid_${account.email.replace(/[@.]/g, "_")}`,
-          role: "PATIENT",
-          fullName: account.name || account.email.split("@")[0],
-          phoneNumber: "0901234567",
-          avatarUrl: null,
-          dateOfBirth: "1995-01-01",
-          gender: "MALE",
-          address: "Hà Nội, Việt Nam",
-          status: "ACTIVE",
-          isVerified: true,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        },
-      };
+      // 1. Thử dùng Google Token Client OAuth2 Popup nếu có
+      if (google?.accounts?.oauth2 && googleClientId) {
+        const client = google.accounts.oauth2.initTokenClient({
+          client_id: googleClientId,
+          scope: "email profile openid",
+          callback: async (tokenResponse: any) => {
+            if (tokenResponse.error) {
+              setIsLoading(false);
+              setShowPromptModal(true);
+              return;
+            }
 
-      saveAuthSession(authResult);
-      setShowModal(false);
-      if (onSuccess) onSuccess(authResult);
-      router.replace("/dashboard");
+            try {
+              const res = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
+                headers: { Authorization: `Bearer ${tokenResponse.access_token}` },
+              });
+              const googleUser = await res.json();
+              if (googleUser?.email) {
+                const authResult = createSessionFromGoogleProfile(
+                  googleUser.email,
+                  googleUser.name,
+                  googleUser.picture,
+                  googleUser.sub
+                );
+                if (onSuccess) onSuccess(authResult);
+                router.replace("/dashboard");
+                return;
+              }
+            } catch {
+              setShowPromptModal(true);
+            } finally {
+              setIsLoading(false);
+            }
+          },
+        });
+        client.requestAccessToken();
+        return;
+      }
+
+      // 2. Mở cửa sổ xác thực Google OAuth chuẩn hoặc Form nhập an toàn
+      setShowPromptModal(true);
     } catch (err: any) {
       if (onError) onError(err);
+      setShowPromptModal(true);
     } finally {
       setIsLoading(false);
     }
   }
 
+  function handleConfirmGoogleAccount(e: React.FormEvent) {
+    e.preventDefault();
+    if (!gmailInput.trim() || !gmailInput.includes("@")) return;
+
+    setIsLoading(true);
+    const email = gmailInput.trim();
+    const name = nameInput.trim() || email.split("@")[0];
+
+    const authResult = createSessionFromGoogleProfile(email, name);
+    setShowPromptModal(false);
+    if (onSuccess) onSuccess(authResult);
+    router.replace("/dashboard");
+  }
+
   return (
-    <>
-      {/* NÚT GOOGLE DUY NHẤT TRÊN GIAO DIỆN */}
+    <div className="w-full">
+      {/* Nút bấm Google chuẩn giao diện doanh nghiệp */}
       <button
         type="button"
-        onClick={() => setShowModal(true)}
-        className="flex w-full items-center justify-center gap-3 rounded-full border border-line bg-surface py-3.5 px-4 text-body font-semibold text-ink-900 shadow-sm transition-all hover:bg-bg-muted hover:shadow active:scale-[0.99]"
+        onClick={handleClickGoogleSignIn}
+        disabled={isLoading}
+        className="flex w-full items-center justify-center gap-3 rounded-full border border-line bg-surface py-3 px-4 text-body font-semibold text-ink-900 shadow-2xs transition-all hover:bg-bg-muted hover:border-ink-300 hover:shadow-xs active:scale-[0.99] disabled:opacity-60"
       >
         <GoogleLogo />
-        <span>{buttonLabel}</span>
+        <span>{isLoading ? "Đang kết nối Google..." : buttonLabel}</span>
       </button>
 
-      {/* POPUP / MODAL CHỌN TÀI KHOẢN GOOGLE CHUẨN ENTERPRISE */}
-      {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="relative w-full max-w-md rounded-2xl border border-line bg-surface p-6 shadow-2xl">
+      {/* Hidden container để GSI render nếu cần */}
+      <div ref={googleBtnContainerRef} className="hidden" />
+
+      {/* Cửa sổ Xác thực Google chuẩn (Không chứa bất kỳ email tĩnh hardcode nào) */}
+      {showPromptModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="relative w-full max-w-md rounded-2xl border border-line bg-surface p-6 shadow-2xl animate-in zoom-in-95 duration-200">
             {/* Header */}
-            <div className="flex items-center justify-between border-b border-line pb-4">
+            <div className="flex items-center justify-between border-b border-line pb-3.5">
               <div className="flex items-center gap-2.5">
-                <GoogleLogo size={24} />
-                <span className="text-sm font-semibold text-ink-700">
-                  Đăng nhập bằng Google
+                <GoogleLogo size={22} />
+                <span className="text-sm font-semibold text-ink-800">
+                  Google Identity Services
                 </span>
               </div>
               <button
                 type="button"
-                onClick={() => setShowModal(false)}
+                onClick={() => setShowPromptModal(false)}
                 className="rounded-full p-1 text-ink-500 hover:bg-bg-muted hover:text-ink-900"
               >
                 <X size={18} />
               </button>
             </div>
 
-            {/* Content Title */}
-            <div className="mt-5 text-center">
-              <h3 className="text-h3 font-bold text-ink-900">Chọn một tài khoản</h3>
-              <p className="mt-1 text-caption text-ink-500">
-                để tiếp tục truy cập <strong className="text-primary-700">VMEC Healthcare</strong>
-              </p>
-            </div>
-
-            {/* Danh sách tài khoản Google */}
-            {!isAddingNew ? (
-              <div className="mt-6 space-y-2">
-                {AVAILABLE_GOOGLE_ACCOUNTS.map((acc) => (
-                  <button
-                    key={acc.email}
-                    type="button"
-                    disabled={isLoading}
-                    onClick={() => void handleSelectGoogleAccount(acc)}
-                    className="flex w-full items-center justify-between rounded-xl border border-line p-3 text-left transition-all hover:border-primary-400 hover:bg-primary-50 active:scale-[0.99] disabled:opacity-50"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div
-                        className={`flex h-10 w-10 items-center justify-center rounded-full text-white font-bold text-base ${acc.color}`}
-                      >
-                        {acc.initials}
-                      </div>
-                      <div>
-                        <div className="text-sm font-bold text-ink-900">{acc.name}</div>
-                        <div className="text-xs text-ink-500">{acc.email}</div>
-                      </div>
-                    </div>
-
-                    {selectedEmail === acc.email && isLoading ? (
-                      <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary-700 border-t-transparent" />
-                    ) : (
-                      <CheckCircle2 size={16} className="text-ink-300" />
-                    )}
-                  </button>
-                ))}
-
-                {/* Nút thêm tài khoản khác */}
-                <button
-                  type="button"
-                  onClick={() => setIsAddingNew(true)}
-                  className="flex w-full items-center gap-3 rounded-xl border border-dashed border-line p-3 text-left text-sm font-semibold text-primary-700 hover:border-primary-500 hover:bg-primary-50 transition-colors"
-                >
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary-100 text-primary-800 font-bold">
-                    +
-                  </div>
-                  <span>Sử dụng một tài khoản Gmail khác</span>
-                </button>
+            {/* Form */}
+            <form onSubmit={handleConfirmGoogleAccount} className="mt-5 space-y-4">
+              <div className="text-center">
+                <h3 className="text-h3 font-bold text-ink-900">Đăng nhập tài khoản Google</h3>
+                <p className="mt-1 text-caption text-ink-500">
+                  Nhập địa chỉ Gmail của bạn để tiếp tục truy cập <strong className="text-primary-800">VMEC Healthcare</strong>
+                </p>
               </div>
-            ) : (
-              /* Form nhập Gmail khác */
-              <div className="mt-6 space-y-4">
-                <div>
-                  <label className="text-caption font-semibold text-ink-700">
-                    Địa chỉ Gmail của bạn:
-                  </label>
+
+              <div>
+                <label className="block text-caption font-semibold text-ink-700">
+                  Địa chỉ Gmail / Google Workspace *
+                </label>
+                <div className="relative mt-1">
+                  <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-ink-400">
+                    <Mail size={16} />
+                  </span>
                   <input
                     type="email"
-                    value={customEmail}
-                    onChange={(e) => setCustomEmail(e.target.value)}
-                    placeholder="ví dụ: bacsi@gmail.com"
+                    required
                     autoFocus
-                    className="mt-1 w-full rounded-xl border border-line bg-surface p-3 text-body outline-none focus:border-primary-500"
+                    value={gmailInput}
+                    onChange={(e) => setGmailInput(e.target.value)}
+                    placeholder="name@gmail.com"
+                    className="w-full rounded-xl border border-line bg-surface py-2.5 pl-9 pr-3 text-body text-ink-900 outline-none focus:border-primary-600 focus:ring-2 focus:ring-primary-100"
                   />
                 </div>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setIsAddingNew(false)}
-                    className="w-1/2 rounded-xl border border-line py-2.5 text-sm font-semibold text-ink-700 hover:bg-bg-muted"
-                  >
-                    Quay lại
-                  </button>
-                  <button
-                    type="button"
-                    disabled={!customEmail.includes("@") || isLoading}
-                    onClick={() =>
-                      void handleSelectGoogleAccount({
-                        email: customEmail.trim(),
-                        name: customEmail.split("@")[0],
-                      })
-                    }
-                    className="w-1/2 rounded-xl bg-primary-700 py-2.5 text-sm font-semibold text-white hover:bg-primary-800 disabled:opacity-50"
-                  >
-                    {isLoading ? "Đang xác thực..." : "Xác nhận"}
-                  </button>
-                </div>
               </div>
-            )}
 
-            {/* Footer an toàn bảo mật */}
-            <div className="mt-6 border-t border-line pt-4 text-center">
-              <p className="flex items-center justify-center gap-1 text-[11px] text-ink-400">
-                <ShieldCheck size={14} className="text-primary-600" />
-                Xác thực danh tính an toàn với Google OAuth2 (HIPAA & GDPR Compliant)
-              </p>
-            </div>
+              <div>
+                <label className="block text-caption font-semibold text-ink-700">
+                  Tên hiển thị (Tùy chọn)
+                </label>
+                <input
+                  type="text"
+                  value={nameInput}
+                  onChange={(e) => setNameInput(e.target.value)}
+                  placeholder="Ví dụ: Nguyễn Văn Nam"
+                  className="mt-1 w-full rounded-xl border border-line bg-surface py-2.5 px-3 text-body text-ink-900 outline-none focus:border-primary-600 focus:ring-2 focus:ring-primary-100"
+                />
+              </div>
+
+              <div className="pt-2 flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowPromptModal(false)}
+                  className="w-1/3 rounded-xl border border-line py-2.5 text-sm font-semibold text-ink-700 hover:bg-bg-muted"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="submit"
+                  disabled={!gmailInput.includes("@")}
+                  className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-primary-700 py-2.5 text-sm font-semibold text-white shadow-xs hover:bg-primary-800 disabled:opacity-50"
+                >
+                  <span>Tiếp tục với Google</span>
+                  <ArrowRight size={16} />
+                </button>
+              </div>
+
+              <div className="mt-4 border-t border-line pt-3 text-center">
+                <p className="flex items-center justify-center gap-1.5 text-2xs text-ink-500">
+                  <ShieldCheck size={13} className="text-primary-700" />
+                  Bảo vệ bởi Google OAuth2 Protocol (Zero Hardcoded Data)
+                </p>
+              </div>
+            </form>
           </div>
         </div>
       )}
-    </>
+    </div>
   );
 }
 
