@@ -7,18 +7,18 @@
 import { createSessionFromGoogleProfile } from "@/lib/auth/googleAuth";
 import type { AuthResult } from "@/lib/api/contracts";
 
-export function getGoogleOAuthUrl(): string {
-  const clientId =
-    process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ||
-    "YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com";
+export const GOOGLE_OAUTH_CLIENT_ID =
+  process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ||
+  "542032071030-4qfe1tijf9tquebqlt0s46kmae8a02pt.apps.googleusercontent.com";
 
+export function getGoogleOAuthUrl(): string {
   const redirectUri =
     typeof window !== "undefined"
       ? `${window.location.origin}/auth/callback`
       : "https://vmec-healthcare-web.vercel.app/auth/callback";
 
   const params = new URLSearchParams({
-    client_id: clientId,
+    client_id: GOOGLE_OAUTH_CLIENT_ID,
     redirect_uri: redirectUri,
     response_type: "token",
     scope: "openid email profile",
