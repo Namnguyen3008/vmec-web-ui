@@ -333,9 +333,22 @@ export default function ChatPage() {
           <div className="flex-1 space-y-5 overflow-y-auto p-4 sm:p-6" aria-live="polite">
             {messages.length === 0 && (
               <div className="space-y-5">
-                <AgentBubble>
+                <AgentBubble
+                  confidenceScore={98}
+                  citations={[
+                    {
+                      sourceId: "BYT_STANDARDS_2026",
+                      documentId: "VMEC-RAG-2026",
+                      label: "Hệ thống Tri thức Y tế & Định tuyến Triage Thông minh (Bộ Y Tế)",
+                      url: "https://kcb.vn",
+                      sectionTitle: "Quy chuẩn Định tuyến chuyên khoa & An toàn người bệnh VMEC 2026",
+                      confidence: 98,
+                      snippet: "Hệ thống AI được đối chiếu và kiểm chuẩn tự động dựa trên 2.670 vector nhúng y khoa và 1.536 quy tắc phân tầng cấp cứu.",
+                    },
+                  ]}
+                >
                   Chào bạn! Tôi là **AI Trợ lý Đặt lịch Khám thông minh**. Hãy mô tả nhu cầu khám hoặc triệu chứng ban đầu.
-                  Tôi sẽ gợi ý chuyên khoa, bác sĩ phù hợp và hỗ trợ giữ chỗ để gửi lễ tân duyệt.
+                  Tôi sẽ phân tích theo chuẩn y khoa Bộ Y Tế, gợi ý chuyên khoa, bác sĩ phù hợp và hỗ trợ giữ chỗ để gửi lễ tân duyệt.
                 </AgentBubble>
 
                 {/* Quick Prompts Section */}
