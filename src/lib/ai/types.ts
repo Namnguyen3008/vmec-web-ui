@@ -2,7 +2,8 @@
  * Type Definitions for Multi-LLM Clinical Agent & Living Context Window
  */
 
-import type { CitationItem, AppointmentOffer } from "@/lib/api/contracts";
+import type { AppointmentOffer } from "@/lib/api/contracts";
+import type { CitationItem } from "@/components/chat/ChatBubbles";
 
 export type SlotStatus = "PENDING" | "IN_PROGRESS" | "VAGUE" | "COMPLETED";
 
