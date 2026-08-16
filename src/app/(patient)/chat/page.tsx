@@ -23,7 +23,7 @@ import {
   updateLivingContextWithUserMessage,
   forceCompleteLivingContext,
 } from "@/lib/ai/workingMemoryStore";
-import type { LivingClinicalContext } from "@/lib/ai/types";
+import type { LivingClinicalContext, PsychologicalSoothingPayload } from "@/lib/ai/types";
 import { ApiError } from "@/lib/api/client";
 import { containsOfferSection, splitOfferSection } from "@/lib/chatContent";
 import type { AppointmentOffer, ChatActionType, ChatMessage, CheckoutContext } from "@/lib/api/contracts";
