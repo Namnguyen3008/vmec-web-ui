@@ -9,10 +9,13 @@ import {
   UserCheck,
   CheckCircle2,
   ShieldCheck,
+  HeartHandshake,
 } from "lucide-react";
+import type { PsychologicalSoothingPayload } from "@/lib/ai/types";
 
 interface ClinicalMessageRendererProps {
   content: string;
+  soothingPayload?: PsychologicalSoothingPayload | null;
 }
 
 /**
@@ -55,13 +58,13 @@ function parseRoutingSection(content: string) {
 
   if (!isRoutingProposal) return null;
 
-  // Extract fields via standard RegExp (no /s flag)
+  // Extract fields via standard RegExp
   const introMatch = content.match(/^([\s\S]*?)(?=🏥|\n\s*•|\n\s*CHUYÊN KHOA)/);
   const specMatch = content.match(/(?:CHUYÊN KHOA (?:ĐỀ XUẤT|CHỈ ĐỊNH):?\s*)(?:\*\*)?([^\n*]+)(?:\*\*)?/i);
   const docMatch = content.match(/(?:BÁC SĨ PHỤ TRÁCH:?\s*)(?:\*\*)?([^\n*(]+)(?:\*\*)?(?:\s*\(([^)]+)\))?/i);
   const reasonMatch = content.match(/(?:NHẬN ĐỊNH LÂM SÀNG SƠ BỘ|CĂN CỨ CHUYÊN MÔN):?\s*([^\n]+(?:\n[^\n📚👇]+)*)/i);
   const guidelineMatch = content.match(/(?:PHÁC ĐỒ (?:THAM CHIẾU|ĐỐI CHIẾU)):?\s*(?:\*)?([^\n*]+)(?:\*)?/i);
-  const footerMatch = content.match(/([^\n]*Mời bạn xem Lời nhắn an tâm[^\n]*)/i);
+  const footerMatch = content.match(/([^\n]*Mời bạn[^\n]*chọn 1 trong 3 khung giờ[^\n]*)/i);
 
   return {
     intro: introMatch ? introMatch[1].trim() : "",
@@ -74,7 +77,10 @@ function parseRoutingSection(content: string) {
   };
 }
 
-export function ClinicalMessageRenderer({ content }: ClinicalMessageRendererProps) {
+export function ClinicalMessageRenderer({
+  content,
+  soothingPayload,
+}: ClinicalMessageRendererProps) {
   const routingData = parseRoutingSection(content);
 
   // If this is a final routing proposal, render the Luxury Medical Routing Card
@@ -152,6 +158,60 @@ export function ClinicalMessageRenderer({ content }: ClinicalMessageRendererProp
                 <span className="font-bold text-ink-800">Phác đồ tham chiếu: </span>
                 <span className="italic">{routingData.guideline}</span>
               </div>
+            </div>
+          )}
+
+          {/* Integrated Psychological Soothing Card (PEARLS) */}
+          {soothingPayload && (
+            <div className="mt-3.5 rounded-xl border border-emerald-200 bg-gradient-to-br from-emerald-50/80 via-teal-50/40 to-white p-3.5 text-xs space-y-2.5 shadow-2xs">
+              <div className="flex items-center justify-between border-b border-emerald-100 pb-2">
+                <div className="flex items-center gap-1.5">
+                  <div className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-600 text-white shadow-2xs">
+                    <HeartHandshake size={12} />
+                  </div>
+                  <span className="font-bold text-emerald-950 text-xs">
+                    Lời Nhắn An Tâm Từ Bác Sĩ
+                  </span>
+                </div>
+                <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-800">
+                  Chuẩn Tâm lý Y khoa PEARLS
+                </span>
+              </div>
+
+              <p className="text-emerald-950 leading-relaxed font-normal text-body-sm">
+                {soothingPayload.comfortingMessage}
+              </p>
+
+              {soothingPayload.doctorCarePromise && (
+                <div className="flex items-start gap-2 rounded-lg bg-white/90 p-2.5 border border-emerald-100/80 text-2xs text-emerald-900">
+                  <ShieldCheck size={14} className="text-emerald-600 shrink-0 mt-0.5" />
+                  <div>
+                    <strong>Cam kết chăm sóc: </strong>
+                    <span>{soothingPayload.doctorCarePromise}</span>
+                  </div>
+                </div>
+              )}
+
+              {soothingPayload.immediateSelfCareTips &&
+                soothingPayload.immediateSelfCareTips.length > 0 && (
+                  <div className="border-t border-emerald-100/70 pt-2">
+                    <div className="flex items-center gap-1 font-bold text-emerald-900 mb-1 text-2xs uppercase tracking-wider">
+                      <Sparkles size={11} className="text-emerald-600" />
+                      <span>Lời khuyên tự chăm sóc tại nhà ngay lúc này:</span>
+                    </div>
+                    <ul className="space-y-1 pl-1">
+                      {soothingPayload.immediateSelfCareTips.map((tip, idx) => (
+                        <li
+                          key={idx}
+                          className="flex items-start gap-1.5 text-2xs text-emerald-950"
+                        >
+                          <CheckCircle2 size={12} className="text-emerald-600 shrink-0 mt-0.5" />
+                          <span>{tip}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
             </div>
           )}
         </div>

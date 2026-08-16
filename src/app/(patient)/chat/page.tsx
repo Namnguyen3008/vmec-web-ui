@@ -35,6 +35,7 @@ interface UiMessage {
   content: string;
   citations?: CitationItem[];
   confidenceScore?: number;
+  soothingPayload?: PsychologicalSoothingPayload | null;
   appointmentQr?: { appointmentId: string; appointmentCode: string | null };
 }
 
@@ -211,6 +212,7 @@ export default function ChatPage() {
           content: aiReply,
           citations: updatedContext.activeCitations,
           confidenceScore: 96,
+          soothingPayload: updatedContext.soothingPayload,
         },
       ]);
 
@@ -370,7 +372,11 @@ export default function ChatPage() {
                 <UserBubble key={message.id}>{message.content}</UserBubble>
               ) : (
                 <Fragment key={message.id}>
-                  <AgentBubble citations={message.citations} confidenceScore={message.confidenceScore}>
+                  <AgentBubble
+                    citations={message.citations}
+                    confidenceScore={message.confidenceScore}
+                    soothingPayload={message.soothingPayload}
+                  >
                     {message.content}
                   </AgentBubble>
                   {message.appointmentQr && (
@@ -383,17 +389,6 @@ export default function ChatPage() {
                   )}
                 </Fragment>
               )
-            )}
-
-            {/* Psychological Soothing Card when Specialty is Indicated */}
-            {livingContext.soothingPayload && offers.length > 0 && (
-              <div className="ml-0 sm:ml-12">
-                <PsychologicalSoothingCard
-                  payload={livingContext.soothingPayload}
-                  doctorName={livingContext.assignedDoctorName}
-                  specialtyName={livingContext.detectedSpecialtyName}
-                />
-              </div>
             )}
 
             {/* Dynamic Contextual Quick-Chips for Active Clarification */}

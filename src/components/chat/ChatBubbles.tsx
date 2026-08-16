@@ -28,14 +28,18 @@ export function UserBubble({ children }: { children: ReactNode }) {
   );
 }
 
+import type { PsychologicalSoothingPayload } from "@/lib/ai/types";
+
 export function AgentBubble({
   children,
   citations,
   confidenceScore = 92,
+  soothingPayload,
 }: {
   children: ReactNode;
   citations?: CitationItem[];
   confidenceScore?: number;
+  soothingPayload?: PsychologicalSoothingPayload | null;
 }) {
   const [showAllDetails, setShowAllDetails] = useState(false);
 
@@ -47,7 +51,10 @@ export function AgentBubble({
       <div className="max-w-2xl flex-1 space-y-2">
         <div className="rounded-2xl rounded-tl-xs border border-line bg-surface px-5 py-4 text-body text-ink-900 shadow-2xs">
           {typeof children === "string" ? (
-            <ClinicalMessageRenderer content={children} />
+            <ClinicalMessageRenderer
+              content={children}
+              soothingPayload={soothingPayload}
+            />
           ) : (
             <div className="whitespace-pre-wrap">{children}</div>
           )}
