@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import { Bot, BookOpen, ShieldCheck, User, FileText, ChevronDown, ChevronUp, ExternalLink, Sparkles, HelpCircle } from "lucide-react";
+import { Bot, BookOpen, ShieldCheck, User, FileText, ChevronDown, ChevronUp, ExternalLink, Sparkles } from "lucide-react";
 
 export interface CitationItem {
   sourceId?: string | null;
@@ -30,15 +30,13 @@ export function AgentBubble({
   children,
   citations,
   confidenceScore = 92,
-  quickReplies,
-  onSelectQuickReply,
 }: {
   children: ReactNode;
   citations?: CitationItem[];
   confidenceScore?: number;
-  quickReplies?: string[];
-  onSelectQuickReply?: (text: string) => void;
 }) {
+  const [showAllDetails, setShowAllDetails] = useState(false);
+
   return (
     <div className="flex items-start gap-3 animate-in fade-in slide-in-from-bottom-1 duration-150">
       <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary-700 text-white shadow-xs">
@@ -47,28 +45,6 @@ export function AgentBubble({
       <div className="max-w-xl space-y-2">
         <div className="rounded-2xl rounded-tl-xs border border-line bg-surface px-5 py-4 text-body text-ink-900 shadow-2xs">
           <div className="whitespace-pre-wrap">{children}</div>
-
-          {/* Quick Reply Chips for Clarification Intake */}
-          {quickReplies && quickReplies.length > 0 && (
-            <div className="mt-4 rounded-xl border border-line bg-primary-50/40 p-3.5 shadow-2xs">
-              <p className="text-xs font-bold text-primary-900 flex items-center gap-1.5 mb-2.5">
-                <HelpCircle size={14} className="text-primary-700 shrink-0" />
-                <span>Gợi ý chọn nhanh để làm rõ thông tin:</span>
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {quickReplies.map((reply, idx) => (
-                  <button
-                    key={idx}
-                    type="button"
-                    onClick={() => onSelectQuickReply?.(reply)}
-                    className="rounded-full border border-primary-300 bg-white py-1.5 px-3.5 text-xs font-medium text-primary-900 shadow-2xs transition-all hover:bg-primary-700 hover:text-white hover:border-primary-700 active:scale-95 text-left"
-                  >
-                    {reply}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
 
           {/* Enhanced Medical Citations Card */}
           {citations && citations.length > 0 && (

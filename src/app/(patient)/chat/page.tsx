@@ -4,7 +4,9 @@ import { Fragment, useEffect, useState, useRef } from "react";
 import { MedicalDisclaimer } from "@/components/layout/MedicalDisclaimer";
 import { ProgressTracker } from "@/components/chat/ProgressTracker";
 import { UserBubble, AgentBubble, TypingDots, type CitationItem } from "@/components/chat/ChatBubbles";
-import { PatientInfoSidebar } from "@/components/chat/PatientInfoSidebar";
+import { LivingContextSidebar } from "@/components/chat/LivingContextSidebar";
+import { ContextualQuickChips } from "@/components/chat/ContextualQuickChips";
+import { PsychologicalSoothingCard } from "@/components/chat/PsychologicalSoothingCard";
 import { ChatInput } from "@/components/chat/ChatInput";
 import { BookingCheckout } from "@/components/chat/BookingCheckout";
 import { AppointmentQrCard } from "@/components/bookings/AppointmentQrCard";
@@ -17,11 +19,16 @@ import {
   sendChatAction,
   sendChatMessage,
 } from "@/lib/api/chat";
-import { getCheckoutContext } from "@/lib/api/appointments";
+import {
+  getOrCreateLivingContext,
+  updateLivingContextWithUserMessage,
+  forceCompleteLivingContext,
+} from "@/lib/ai/workingMemoryStore";
+import type { LivingClinicalContext } from "@/lib/ai/types";
 import { ApiError } from "@/lib/api/client";
 import { containsOfferSection, splitOfferSection } from "@/lib/chatContent";
 import type { AppointmentOffer, ChatActionType, ChatMessage, CheckoutContext } from "@/lib/api/contracts";
-import { HeartPulse, Stethoscope, Baby, Activity, Sparkles, RotateCcw } from "lucide-react";
+import { HeartPulse, Stethoscope, Baby, Activity, Sparkles, RotateCcw, PanelRightOpen, X } from "lucide-react";
 
 interface UiMessage {
   id: string;
@@ -29,7 +36,6 @@ interface UiMessage {
   content: string;
   citations?: CitationItem[];
   confidenceScore?: number;
-  quickReplies?: string[];
   appointmentQr?: { appointmentId: string; appointmentCode: string | null };
 }
 
@@ -37,22 +43,22 @@ const QUICK_PROMPTS = [
   {
     icon: <HeartPulse className="text-danger" size={16} />,
     title: "Đau ngực trái",
-    text: "Tôi bị tức ngực",
+    text: "Tôi bị đau tức ngực trái khi leo cầu thang, kèm cảm giác hồi hộp kéo dài 2 ngày.",
   },
   {
     icon: <Activity className="text-warning-800" size={16} />,
     title: "Đau dạ dày / ợ chua",
-    text: "Tôi bị đau dạ dày",
+    text: "Tôi bị đau rát vùng thượng vị 3 ngày nay, ợ chua nhiều sau khi ăn đồ cay nóng.",
   },
   {
     icon: <Baby className="text-primary-700" size={16} />,
     title: "Khám Nhi khoa",
-    text: "Con tôi bị sốt",
+    text: "Con tôi 4 tuổi bị sốt nhẹ 38.5°C kèm ho hắng hắt hơi 2 ngày nay.",
   },
   {
     icon: <Stethoscope className="text-primary-600" size={16} />,
     title: "Chóng mặt / Hoa mắt",
-    text: "Tôi bị chóng mặt đau đầu",
+    text: "Tôi hay bị hoa mắt chóng mặt khi đứng dậy đột ngột, thỉnh thoảng cảm giác quay cuồng.",
   },
 ];
 
@@ -62,22 +68,23 @@ function toUiMessage(message: ChatMessage): UiMessage {
   return {
     id: message.id,
     sender: message.senderType,
-    content: message.senderType === "AI"
-      ? splitOfferSection(message.content).advice
-      : message.content,
+    content:
+      message.senderType === "AI"
+        ? splitOfferSection(message.content).advice
+        : message.content,
     citations: message.citations,
-    confidenceScore: message.senderType === "AI" ? 95 : undefined,
-    quickReplies: Array.isArray(message.metadata?.quickReplies)
-      ? (message.metadata.quickReplies as string[])
-      : undefined,
-    appointmentQr: message.messageType === "APPOINTMENT_QR" && typeof message.metadata.appointment_id === "string"
-      ? {
-          appointmentId: message.metadata.appointment_id,
-          appointmentCode: typeof message.metadata.appointment_code === "string"
-            ? message.metadata.appointment_code
-            : null,
-        }
-      : undefined,
+    confidenceScore: message.senderType === "AI" ? 96 : undefined,
+    appointmentQr:
+      message.messageType === "APPOINTMENT_QR" &&
+      typeof message.metadata.appointment_id === "string"
+        ? {
+            appointmentId: message.metadata.appointment_id,
+            appointmentCode:
+              typeof message.metadata.appointment_code === "string"
+                ? message.metadata.appointment_code
+                : null,
+          }
+        : undefined,
   };
 }
 
@@ -92,12 +99,14 @@ export default function ChatPage() {
   const [actions, setActions] = useState<ChatActionType[]>([]);
   const [offers, setOffers] = useState<AppointmentOffer[]>([]);
   const [checkout, setCheckout] = useState<CheckoutContext | null>(null);
-  // Nội dung AI thô gần nhất (chưa tách phần khung giờ), dùng để render
-  // DoctorSlotSelector và làm nguồn fallback khi API không trả offers.
   const [lastRawOfferText, setLastRawOfferText] = useState("");
+  const [showMobileSidebar, setShowMobileSidebar] = useState(false);
 
-  // Dynamic state for sidebar & progress
-  const [recordedSymptoms, setRecordedSymptoms] = useState<string[]>([]);
+  // Living Clinical Context State (Powered by Working Memory)
+  const [livingContext, setLivingContext] = useState<LivingClinicalContext>(() =>
+    getOrCreateLivingContext("default_session")
+  );
+
   const localMessageIdRef = useRef(0);
 
   useEffect(() => {
@@ -111,6 +120,8 @@ export default function ChatPage() {
           latestSession.status !== "ACTIVE" ||
           Date.now() - Date.parse(latestSession.startedAt) >= CHAT_SESSION_LIFETIME_MS
         ) {
+          const freshContext = getOrCreateLivingContext("default_session");
+          setLivingContext(freshContext);
           return;
         }
 
@@ -119,14 +130,27 @@ export default function ChatPage() {
 
         setSessionId(latestSession.id);
         setMessages(history.map(toUiMessage));
-        const lastAssistantMessage = [...history].reverse().find((message) => message.senderType === "AI");
+
+        const lastAssistantMessage = [...history]
+          .reverse()
+          .find((message) => message.senderType === "AI");
         setLastRawOfferText(lastAssistantMessage?.content || "");
+
+        const context = getOrCreateLivingContext(latestSession.id);
+        setLivingContext(context);
+
         if (latestSession.emergencyFlag) {
-          setEmergency("Phiên này đã ghi nhận dấu hiệu khẩn cấp. Hãy gọi 115 hoặc bắt đầu cuộc trò chuyện mới.");
+          setEmergency(
+            "Phiên này đã ghi nhận dấu hiệu khẩn cấp. Hãy gọi 115 hoặc bắt đầu cuộc trò chuyện mới."
+          );
         }
       } catch (cause) {
         if (!cancelled) {
-          setError(cause instanceof Error ? cause.message : "Không thể khôi phục cuộc trò chuyện gần nhất.");
+          setError(
+            cause instanceof Error
+              ? cause.message
+              : "Không thể khôi phục cuộc trò chuyện gần nhất."
+          );
         }
       } finally {
         if (!cancelled) setIsRestoring(false);
@@ -147,177 +171,182 @@ export default function ChatPage() {
         .catch(() => undefined);
     };
     window.addEventListener("p208:appointment-confirmed", refreshConfirmedAppointment);
-    return () => window.removeEventListener("p208:appointment-confirmed", refreshConfirmedAppointment);
+    return () =>
+      window.removeEventListener("p208:appointment-confirmed", refreshConfirmedAppointment);
   }, [sessionId]);
 
   const currentStep = checkout
     ? 4
-    : offers.length > 0
-      ? 3
-      : actions.includes("CONFIRM_TRIAGE") || recordedSymptoms.length > 0
-        ? 2
-        : 1;
-
-  function nextLocalMessageId(prefix: string) {
-    localMessageIdRef.current += 1;
-    return `${prefix}-${localMessageIdRef.current}`;
-  }
-
-  async function resetChat() {
-    if (isSending || isRestoring) return;
-    setIsSending(true);
-    setError(null);
-    try {
-      const session = await createChatSession();
-      setSessionId(session.id);
-      setMessages([]);
-      setOffers([]);
-      setActions([]);
-      setRecordedSymptoms([]);
-      setCheckout(null);
-      setEmergency(null);
-      setLastRawOfferText("");
-      setInput("");
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Không thể tạo cuộc trò chuyện mới.");
-    } finally {
-      setIsSending(false);
-    }
-  }
+    : offers.length > 0 || containsOfferSection(lastRawOfferText)
+    ? 3
+    : messages.some((m) => m.sender === "PATIENT")
+    ? 2
+    : 1;
 
   async function handleSend(textToSend?: string) {
-    const content = (textToSend || input).trim();
-    if (!content || isSending || isRestoring || emergency) return;
+    const raw = textToSend ?? input;
+    const trimmed = raw.trim();
+    if (!trimmed || isSending) return;
 
-    setInput("");
+    if (!textToSend) setInput("");
     setError(null);
     setIsSending(true);
-    const optimisticId = nextLocalMessageId("pending");
-    setMessages((current) => [...current, { id: optimisticId, sender: "PATIENT", content }]);
+
+    const userMessageId = `user-${Date.now()}-${localMessageIdRef.current++}`;
+    setMessages((current) => [
+      ...current,
+      { id: userMessageId, sender: "PATIENT", content: trimmed },
+    ]);
 
     try {
       let activeSessionId = sessionId;
       if (!activeSessionId) {
-        const session = await createChatSession(content.slice(0, 60));
+        const session = await createChatSession(
+          trimmed.length > 30 ? `${trimmed.slice(0, 30)}...` : trimmed
+        );
         activeSessionId = session.id;
         setSessionId(session.id);
       }
 
-      let result;
-      try {
-        result = await sendChatMessage(activeSessionId, content);
-      } catch (cause) {
-        if (!(cause instanceof ApiError) || cause.code !== "CHAT_SESSION_EXPIRED") throw cause;
+      // Cập nhật Living Context & Thẩm định 4 trường lâm sàng
+      const { context: updatedContext, replyText } = updateLivingContextWithUserMessage(
+        activeSessionId,
+        trimmed
+      );
+      setLivingContext({ ...updatedContext });
 
-        const session = await createChatSession(content.slice(0, 60));
-        activeSessionId = session.id;
-        setSessionId(session.id);
-        setMessages([{ id: optimisticId, sender: "PATIENT", content }]);
-        result = await sendChatMessage(activeSessionId, content);
-      }
+      const result = await sendChatMessage(activeSessionId, trimmed);
 
-      // Tách phần danh sách khung giờ ra khỏi bubble chat: phần khung giờ
-      // được hiển thị bằng component DoctorSlotSelector bên dưới.
-      const assistantContent = result.assistantMessage.content;
-      const { advice: assistantAdvice } = splitOfferSection(assistantContent);
-      setLastRawOfferText(assistantContent);
+      const aiReply =
+        updatedContext.isCompleted || updatedContext.isEmergency
+          ? replyText
+          : result.assistantMessage.content || replyText;
 
       setMessages((current) => [
-        ...current.filter((item) => item.id !== optimisticId),
-        { id: result.userMessage.id, sender: "PATIENT", content: result.userMessage.content },
+        ...current,
         {
           id: result.assistantMessage.id,
           sender: "AI",
-          content: assistantAdvice,
-          citations: result.assistantMessage.citations || [],
-          confidenceScore: 90,
+          content: aiReply,
+          citations: updatedContext.activeCitations.length > 0
+            ? updatedContext.activeCitations
+            : result.assistantMessage.citations,
+          confidenceScore: 96,
         },
       ]);
 
-      if (result.emergency?.detected) {
+      if (updatedContext.isCompleted && updatedContext.appointmentOffers.length > 0) {
+        setOffers(updatedContext.appointmentOffers);
+        setLastRawOfferText(aiReply);
+        setActions(["ACCEPT_APPOINTMENT", "CHANGE_APPOINTMENT", "DECLINE_APPOINTMENT"]);
+      } else if (result.appointmentOffers && result.appointmentOffers.length > 0) {
+        setOffers(result.appointmentOffers);
+        setLastRawOfferText(result.assistantMessage.content);
+        setActions(result.availableActions);
+      }
+
+      if (result.emergency?.detected || updatedContext.isEmergency) {
         setEmergency(
-          result.emergency.actionMessage ||
-          "Có dấu hiệu khẩn cấp. Hãy gọi 115 hoặc đến cơ sở y tế gần nhất ngay.",
+          result.emergency?.actionMessage ??
+            "Triệu chứng có dấu hiệu khẩn cấp theo phác đồ BYT. Vui lòng gọi 115 hoặc đến bệnh viện ngay lập tức!"
         );
       }
-      setActions(result.availableActions || []);
-      setOffers(
-        result.appointmentOffers?.length
-          ? result.appointmentOffers
-          : result.appointmentOffer
-            ? [result.appointmentOffer]
-            : [],
-      );
     } catch (cause) {
-      setMessages((current) => current.filter((item) => item.id !== optimisticId));
       setError(
-        cause instanceof Error
+        cause instanceof ApiError
           ? cause.message
-          : "Không thể kết nối với dịch vụ backend. Vui lòng kiểm tra lại dịch vụ Flask.",
+          : "Không thể gửi tin nhắn. Vui lòng thử lại."
       );
     } finally {
       setIsSending(false);
     }
   }
 
-  async function handleAction(action: ChatActionType, payload: Record<string, unknown> = {}) {
-    if (isSending) return;
-    setIsSending(true);
+  function handleForceComplete() {
+    const activeSessionId = sessionId || "default_session";
+    const completed = forceCompleteLivingContext(activeSessionId);
+    setLivingContext({ ...completed });
+    if (completed.appointmentOffers.length > 0) {
+      setOffers(completed.appointmentOffers);
+      setActions(["ACCEPT_APPOINTMENT", "CHANGE_APPOINTMENT", "DECLINE_APPOINTMENT"]);
+    }
+  }
+
+  async function handleAction(actionType: ChatActionType, payload?: Record<string, unknown>) {
+    if (!sessionId || isSending) return;
     setError(null);
+    setIsSending(true);
 
     try {
-      if (sessionId) {
-        const result = await sendChatAction(sessionId, action, payload);
-        // Áp dụng tách phần khung giờ cho cả replyText từ action.
-        const { advice: replyAdvice } = splitOfferSection(result.replyText);
-        setLastRawOfferText(result.replyText);
-        setMessages((current) => [
-          ...current,
-          { id: nextLocalMessageId("action"), sender: "AI", content: replyAdvice },
-        ]);
-        setActions(result.availableActions || []);
-        setOffers(
-          result.appointmentOffers?.length
-            ? result.appointmentOffers
-            : result.appointmentOffer
-              ? [result.appointmentOffer]
-              : [],
-        );
-        if (result.checkout?.holdToken) {
-          const context = await getCheckoutContext(result.checkout.selection.slotId);
-          setCheckout({ ...context, holdToken: result.checkout.holdToken });
-          setOffers([]);
-          setActions([]);
-        }
-        return;
+      const result = await sendChatAction(sessionId, actionType, payload);
+      setMessages((current) => [
+        ...current,
+        {
+          id: `action-${Date.now()}`,
+          sender: "AI",
+          content: result.replyText,
+        },
+      ]);
+      setActions(result.availableActions);
+
+      if (result.workflowState === "CHECKOUT_READY" && result.checkout) {
+        setCheckout(result.checkout);
+      } else if (actionType === "DECLINE_APPOINTMENT" || actionType === "CHANGE_APPOINTMENT") {
+        setOffers([]);
+        setCheckout(null);
+        setLastRawOfferText("");
       }
-      throw new Error("Phiên hội thoại chưa được khởi tạo.");
     } catch (cause) {
       setError(
-        cause instanceof Error
+        cause instanceof ApiError
           ? cause.message
-          : "Không thể thực hiện thao tác với máy chủ backend.",
+          : "Không thể xử lý yêu cầu. Vui lòng thử lại."
       );
     } finally {
       setIsSending(false);
     }
+  }
+
+  async function resetChat() {
+    setSessionId(null);
+    setMessages([]);
+    setInput("");
+    setError(null);
+    setEmergency(null);
+    setActions([]);
+    setOffers([]);
+    setCheckout(null);
+    setLastRawOfferText("");
+    const fresh = getOrCreateLivingContext(`session_${Date.now()}`);
+    setLivingContext(fresh);
   }
 
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, offers, isSending, emergency]);
+  }, [messages, offers, isSending, emergency, livingContext.suggestedChips]);
 
   return (
     <div className="flex h-[calc(100vh-64px)] flex-col overflow-hidden bg-bg-soft/30">
       <MedicalDisclaimer />
 
-      <div className="flex items-center border-b border-line bg-surface">
+      {/* Header bar */}
+      <div className="flex items-center justify-between border-b border-line bg-surface px-3 sm:px-5 py-2">
         <div className="min-w-0 flex-1">
           <ProgressTracker currentStep={currentStep} />
         </div>
-        <div className="px-3 sm:px-5">
+        <div className="flex items-center gap-2">
+          {/* Mobile Living Context Button */}
+          <button
+            type="button"
+            onClick={() => setShowMobileSidebar(!showMobileSidebar)}
+            className="md:hidden flex items-center gap-1.5 rounded-lg border border-line bg-surface px-2.5 py-1.5 text-xs font-semibold text-primary-800"
+          >
+            <PanelRightOpen size={14} />
+            <span>Tiến độ ({livingContext.progressPercentage}%)</span>
+          </button>
+
           <Button
             type="button"
             variant="outline"
@@ -331,9 +360,10 @@ export default function ChatPage() {
         </div>
       </div>
 
-      <div className="flex flex-1 overflow-hidden flex-col lg:flex-row">
+      {/* 2-Column Main Workspace */}
+      <div className="flex flex-1 overflow-hidden">
+        {/* Left Column: Conversational Stream */}
         <div className="flex flex-1 flex-col justify-between overflow-hidden">
-          {/* Main scrollable chat area */}
           <div className="flex-1 space-y-5 overflow-y-auto p-4 sm:p-6" aria-live="polite">
             {messages.length === 0 && (
               <div className="space-y-5">
@@ -351,8 +381,8 @@ export default function ChatPage() {
                     },
                   ]}
                 >
-                  Chào bạn! Tôi là **AI Trợ lý Đặt lịch Khám thông minh**. Hãy mô tả nhu cầu khám hoặc triệu chứng ban đầu.
-                  Tôi sẽ phân tích theo chuẩn y khoa Bộ Y Tế, gợi ý chuyên khoa, bác sĩ phù hợp và hỗ trợ giữ chỗ để gửi lễ tân duyệt.
+                  Chào bạn! Tôi là **AI Trợ lý Khám bệnh Thông minh**. Hãy chia sẻ về triệu chứng hoặc sự khó chịu bạn đang gặp phải.
+                  Tôi sẽ cùng bạn làm rõ tình trạng, xoa dịu tâm lý và định hướng chuyên khoa chính xác nhất.
                 </AgentBubble>
 
                 {/* Quick Prompts Section */}
@@ -385,17 +415,13 @@ export default function ChatPage() {
               </div>
             )}
 
+            {/* Message Feed */}
             {messages.map((message) =>
               message.sender === "PATIENT" ? (
                 <UserBubble key={message.id}>{message.content}</UserBubble>
               ) : (
                 <Fragment key={message.id}>
-                  <AgentBubble
-                    citations={message.citations}
-                    confidenceScore={message.confidenceScore}
-                    quickReplies={message.quickReplies}
-                    onSelectQuickReply={(replyText) => void handleSend(replyText)}
-                  >
+                  <AgentBubble citations={message.citations} confidenceScore={message.confidenceScore}>
                     {message.content}
                   </AgentBubble>
                   {message.appointmentQr && (
@@ -407,8 +433,32 @@ export default function ChatPage() {
                     </div>
                   )}
                 </Fragment>
-              ),
+              )
             )}
+
+            {/* Psychological Soothing Card when Specialty is Indicated */}
+            {livingContext.soothingPayload && offers.length > 0 && (
+              <div className="ml-0 sm:ml-12">
+                <PsychologicalSoothingCard
+                  payload={livingContext.soothingPayload}
+                  doctorName={livingContext.assignedDoctorName}
+                  specialtyName={livingContext.detectedSpecialtyName}
+                />
+              </div>
+            )}
+
+            {/* Dynamic Contextual Quick-Chips for Active Clarification */}
+            {!livingContext.isCompleted &&
+              !livingContext.isEmergency &&
+              livingContext.suggestedChips &&
+              livingContext.suggestedChips.length > 0 &&
+              !isSending && (
+                <ContextualQuickChips
+                  chips={livingContext.suggestedChips}
+                  onSelect={(fullText) => handleSend(fullText)}
+                  disabled={isSending}
+                />
+              )}
 
             {isSending && (
               <AgentBubble>
@@ -422,7 +472,9 @@ export default function ChatPage() {
                 offers={offers}
                 rawTextMessage={lastRawOfferText}
                 isSubmitting={isSending}
-                onSelectOffer={(offer) => handleAction("ACCEPT_APPOINTMENT", { slot_id: offer.slotId })}
+                onSelectOffer={(offer) =>
+                  handleAction("ACCEPT_APPOINTMENT", { slot_id: offer.slotId })
+                }
                 onChangeAppointment={() => handleAction("CHANGE_APPOINTMENT")}
                 onDeclineAppointment={() => handleAction("DECLINE_APPOINTMENT")}
               />
@@ -444,7 +496,9 @@ export default function ChatPage() {
                     {
                       id: `appointment-${appointment.id}`,
                       sender: "AI",
-                      content: `🎉 **Yêu cầu đặt lịch ${appointment.appointmentCode || "APT-2026-CONFIRMED"} đã được gửi tới Lễ tân thành công!**\n\nLễ tân sẽ duyệt lịch và gửi thông báo xác nhận cho bạn qua tin nhắn / ứng dụng trong thời gian sớm nhất.`,
+                      content: `🎉 **Yêu cầu đặt lịch ${
+                        appointment.appointmentCode || "APT-2026-CONFIRMED"
+                      } đã được gửi tới Lễ tân thành công!**\n\nLễ tân sẽ duyệt lịch và gửi thông báo xác nhận cho bạn qua tin nhắn / ứng dụng trong thời gian sớm nhất.`,
                     },
                   ]);
                 }}
@@ -453,7 +507,10 @@ export default function ChatPage() {
 
             {/* Emergency Warning */}
             {emergency && (
-              <div role="alert" className="ml-0 sm:ml-12 rounded-card border-2 border-danger bg-danger-soft p-4 sm:p-5 text-danger shadow-md">
+              <div
+                role="alert"
+                className="ml-0 sm:ml-12 rounded-card border-2 border-danger bg-danger-soft p-4 sm:p-5 text-danger shadow-md"
+              >
                 <p className="font-bold text-body-lg">⚠️ CẢNH BÁO KHẨN CẤP Y TẾ</p>
                 <p className="mt-1 text-body">{emergency}</p>
                 <a
@@ -466,7 +523,10 @@ export default function ChatPage() {
             )}
 
             {error && (
-              <p role="alert" className="ml-0 sm:ml-12 rounded-xl bg-danger-soft px-4 py-3 text-body text-danger">
+              <p
+                role="alert"
+                className="ml-0 sm:ml-12 rounded-xl bg-danger-soft px-4 py-3 text-body text-danger"
+              >
                 {error}
               </p>
             )}
@@ -482,13 +542,40 @@ export default function ChatPage() {
           />
         </div>
 
-        <PatientInfoSidebar
-          name="Nguyễn Văn An"
-          meta="Hồ sơ bệnh nhân trực tuyến"
-          recordedSymptoms={recordedSymptoms}
-          onSelectQuestion={(q) => handleSend(q)}
+        {/* Right Column: Desktop Living Clinical Context Window */}
+        <LivingContextSidebar
+          context={livingContext}
+          onForceComplete={handleForceComplete}
+          className="w-80 lg:w-96 shrink-0 hidden md:flex"
         />
       </div>
+
+      {/* Mobile Drawer for Living Context */}
+      {showMobileSidebar && (
+        <div className="fixed inset-0 z-50 flex justify-end bg-black/50 backdrop-blur-xs md:hidden">
+          <div className="relative w-5/6 max-w-sm h-full bg-surface shadow-2xl flex flex-col">
+            <div className="flex items-center justify-between p-4 border-b border-line">
+              <h3 className="font-bold text-sm text-ink-900">Hồ Sơ Ngữ Cảnh Sống</h3>
+              <button
+                type="button"
+                onClick={() => setShowMobileSidebar(false)}
+                className="p-1 rounded-full text-ink-500 hover:bg-bg-muted"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto">
+              <LivingContextSidebar
+                context={livingContext}
+                onForceComplete={() => {
+                  handleForceComplete();
+                  setShowMobileSidebar(false);
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
