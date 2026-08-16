@@ -10,7 +10,7 @@ export type PatientRow = {
   phone: string;
   reason: string;
   department: string;
-  status: { label: string; tone: "warning" | "neutral" | "danger" };
+  status: { label: string; tone: "warning" | "neutral" | "danger" | "success" };
   emergency?: boolean;
 };
 

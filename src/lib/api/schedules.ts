@@ -1,6 +1,7 @@
 import { apiRequest } from "@/lib/api/client";
 import type { ReceptionScheduleOverview, ReceptionScheduleSlot, ScheduleSlot } from "@/lib/api/contracts";
 import { list, mapReceptionScheduleOverview, mapReceptionScheduleSlot, mapScheduleSlot } from "@/lib/api/mappers";
+import { MASTER_DOCTORS, MASTER_SPECIALTIES, getSpecialtyByCode, getDoctorById } from "@/lib/clinicalMasterCatalog";
 
 export async function listAvailableSlots(input: {
   doctorId: string;
@@ -16,33 +17,53 @@ export async function listAvailableSlots(input: {
       mapScheduleSlot,
     );
   } catch {
-    const today = new Date().toISOString().split("T")[0];
+    const today = (input.dateFrom || new Date().toISOString()).split("T")[0];
+    const doc = getDoctorById(input.doctorId) || MASTER_DOCTORS[0];
+
     return [
       {
-        id: "slot_01",
-        doctorId: input.doctorId,
-        facilityId: "fac_01",
-        specialtyId: "TIM_MACH",
-        startTime: `${today}T08:30:00Z`,
-        endTime: `${today}T09:00:00Z`,
+        id: `slot_${doc.id}_0830`,
+        doctorId: doc.id,
+        facilityId: "fac_vmec_01",
+        specialtyId: doc.specialtyCode,
+        startTime: `${today}T08:30:00+07:00`,
+        endTime: `${today}T09:00:00+07:00`,
         status: "AVAILABLE",
       },
       {
-        id: "slot_02",
-        doctorId: input.doctorId,
-        facilityId: "fac_01",
-        specialtyId: "TIM_MACH",
-        startTime: `${today}T09:30:00Z`,
-        endTime: `${today}T10:00:00Z`,
+        id: `slot_${doc.id}_0930`,
+        doctorId: doc.id,
+        facilityId: "fac_vmec_01",
+        specialtyId: doc.specialtyCode,
+        startTime: `${today}T09:30:00+07:00`,
+        endTime: `${today}T10:00:00+07:00`,
         status: "AVAILABLE",
       },
       {
-        id: "slot_03",
-        doctorId: input.doctorId,
-        facilityId: "fac_01",
-        specialtyId: "TIM_MACH",
-        startTime: `${today}T14:00:00Z`,
-        endTime: `${today}T14:30:00Z`,
+        id: `slot_${doc.id}_1030`,
+        doctorId: doc.id,
+        facilityId: "fac_vmec_01",
+        specialtyId: doc.specialtyCode,
+        startTime: `${today}T10:30:00+07:00`,
+        endTime: `${today}T11:00:00+07:00`,
+        status: "AVAILABLE",
+      },
+      {
+        id: `slot_${doc.id}_1400`,
+        doctorId: doc.id,
+        facilityId: "fac_vmec_01",
+        specialtyId: doc.specialtyCode,
+        startTime: `${today}T14:00:00+07:00`,
+        endTime: `${today}T14:30:00+07:00`,
+        status: "AVAILABLE",
+      },
+      {
+        id: `slot_${doc.id}_1500`,
+        doctorId: doc.id,
+        facilityId: "fac_vmec_01",
+        specialtyId: doc.specialtyCode,
+        startTime: `${today}T15:00:00+07:00`,
+        endTime: `${today}T15:30:00+07:00`,
         status: "AVAILABLE",
       },
     ];
@@ -97,57 +118,60 @@ export async function getReceptionSchedule(
       await apiRequest<unknown>(`/api/v1/schedules/reception?${params.toString()}`),
     );
   } catch {
+    const filteredDoctors = specialtyId
+      ? MASTER_DOCTORS.filter((d) => d.specialtyCode.toUpperCase() === specialtyId.toUpperCase())
+      : MASTER_DOCTORS;
+
+    const items: ReceptionScheduleSlot[] = [];
+    for (const doc of filteredDoctors) {
+      const times = [
+        { start: "08:00", end: "08:30", status: "AVAILABLE" as const },
+        { start: "08:30", end: "09:00", status: "BOOKED" as const },
+        { start: "09:00", end: "09:30", status: "AVAILABLE" as const },
+        { start: "09:30", end: "10:00", status: "HELD" as const },
+        { start: "10:00", end: "10:30", status: "AVAILABLE" as const },
+        { start: "14:00", end: "14:30", status: "AVAILABLE" as const },
+        { start: "14:30", end: "15:00", status: "BOOKED" as const },
+        { start: "15:00", end: "15:30", status: "AVAILABLE" as const },
+      ];
+
+      for (const t of times) {
+        items.push({
+          id: `slot_${doc.id}_${t.start.replace(":", "")}`,
+          doctorId: doc.id,
+          doctorName: doc.fullName,
+          doctorAvatarUrl: doc.avatar,
+          facilityId: "fac_vmec_01",
+          facilityName: doc.facilityName,
+          specialtyId: doc.specialtyCode,
+          specialtyName: doc.specialtyName,
+          room: `${doc.room} - ${doc.building}`,
+          startTime: `${date}T${t.start}:00+07:00`,
+          endTime: `${date}T${t.end}:00+07:00`,
+          status: t.status,
+          blockedReason: null,
+          canSelfUnblock: false,
+        });
+      }
+    }
+
+    const availableCount = items.filter((i) => i.status === "AVAILABLE").length;
+    const bookedCount = items.filter((i) => i.status === "BOOKED").length;
+    const heldCount = items.filter((i) => i.status === "HELD").length;
+
     return {
       date,
-      items: [
-        {
-          id: "slot_01",
-          doctorId: "doc_TIM_MACH_01",
-          doctorName: "BS.CKII Trần Minh Đức",
-          doctorAvatarUrl: null,
-          facilityId: "fac_vmec_01",
-          facilityName: "Bệnh viện Đa khoa Quốc tế VMEC",
-          specialtyId: "TIM_MACH",
-          specialtyName: "Khoa Tim Mạch",
-          room: "Phòng 302",
-          startTime: `${date}T08:30:00Z`,
-          endTime: `${date}T09:00:00Z`,
-          status: "AVAILABLE",
-          blockedReason: null,
-          canSelfUnblock: false,
-        },
-        {
-          id: "slot_02",
-          doctorId: "doc_TIEU_HOA_01",
-          doctorName: "TS.BS Nguyễn Thị Mai Lan",
-          doctorAvatarUrl: null,
-          facilityId: "fac_vmec_01",
-          facilityName: "Bệnh viện Đa khoa Quốc tế VMEC",
-          specialtyId: "TIEU_HOA",
-          specialtyName: "Khoa Tiêu Hóa",
-          room: "Phòng 205",
-          startTime: `${date}T09:30:00Z`,
-          endTime: `${date}T10:00:00Z`,
-          status: "BOOKED",
-          blockedReason: null,
-          canSelfUnblock: false,
-        },
-      ],
-      specialties: [
-        { id: "TIM_MACH", name: "Khoa Tim Mạch" },
-        { id: "TIEU_HOA", name: "Khoa Tiêu Hóa" },
-        { id: "NHI_KHOA", name: "Khoa Nhi" },
-        { id: "THAN_KINH", name: "Khoa Thần Kinh" },
-      ],
+      items,
+      specialties: MASTER_SPECIALTIES.map((s) => ({ id: s.code, name: s.name })),
       summary: {
-        doctorCount: 8,
-        totalSlots: 32,
-        availableSlots: 24,
-        heldSlots: 2,
-        bookedSlots: 6,
+        doctorCount: filteredDoctors.length,
+        totalSlots: items.length,
+        availableSlots: availableCount,
+        heldSlots: heldCount,
+        bookedSlots: bookedCount,
         blockedSlots: 0,
         cancelledSlots: 0,
-        utilizationPercent: 25,
+        utilizationPercent: items.length > 0 ? Math.round(((bookedCount + heldCount) / items.length) * 100) : 0,
       },
     };
   }

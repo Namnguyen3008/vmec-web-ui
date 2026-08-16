@@ -47,7 +47,7 @@ function VerificationContent() {
         {valid && appointment && (
           <dl className="mt-6 space-y-3 rounded-xl bg-bg-muted p-4 text-left text-body">
             <div><dt className="text-caption text-ink-500">Mã hẹn</dt><dd className="font-bold text-ink-900">{appointment.appointmentCode}</dd></div>
-            <div><dt className="text-caption text-ink-500">Bệnh nhân</dt><dd className="font-semibold text-ink-900">{String(appointment.patientSnapshot.full_name || "Chưa cập nhật")}</dd></div>
+            <div><dt className="text-caption text-ink-500">Bệnh nhân</dt><dd className="font-semibold text-ink-900">{String((appointment.patientSnapshot as Record<string, unknown>).fullName || (appointment.patientSnapshot as Record<string, unknown>).full_name || "Chưa cập nhật")}</dd></div>
             <div><dt className="text-caption text-ink-500">Thời gian</dt><dd className="text-ink-900">{appointment.slotStart ? new Intl.DateTimeFormat("vi-VN", { dateStyle: "medium", timeStyle: "short" }).format(new Date(appointment.slotStart)) : "Chưa cập nhật"}</dd></div>
           </dl>
         )}

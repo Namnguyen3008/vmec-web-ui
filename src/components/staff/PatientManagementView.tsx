@@ -1,83 +1,111 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { PatientFilterTabs, PatientTable, type PatientRow } from "@/components/staff/PatientTable";
 import { PatientDetailPanel, type PatientDetail } from "@/components/staff/PatientDetailPanel";
-
-const rows: PatientRow[] = [
-  {
-    id: "8943",
-    initial: "B",
-    name: "Trần Văn B",
-    code: "#BN-8943",
-    phone: "0912345678",
-    reason: "Đau khớp gối phải kéo dài",
-    department: "Khoa Chấn thương Chỉnh hình",
-    status: { label: "Đang khám", tone: "neutral" },
-  },
-  {
-    id: "8945",
-    initial: "M",
-    name: "Lê Thị Mai",
-    code: "#BN-8945",
-    phone: "0987654321",
-    reason: "Kiểm tra tổng quát định kỳ",
-    department: "Khoa Nội Tổng hợp",
-    status: { label: "Chờ khám", tone: "neutral" },
-  },
-  {
-    id: "8942",
-    initial: "C",
-    name: "Phạm Văn C",
-    code: "#BN-8942",
-    phone: "0901234567",
-    reason: "Đau ngực dữ dội, khó thở",
-    department: "Khoa Tim mạch / Cấp cứu",
-    status: { label: "Cấp cứu", tone: "danger" },
-    emergency: true,
-  },
-];
-
-const details: Record<string, PatientDetail> = {
-  "8943": {
-    name: "Trần Văn B",
-    meta: "Nam, 45 Tuổi • #BN-8943",
-    phone: "0912 345 678",
-    aiSummary:
-      "Bệnh nhân khai báo đau nhức khớp gối phải kéo dài 2 tuần, đi lại khó khăn, đau tăng khi leo cầu thang. Tiền sử thoái hóa khớp nhẹ phát hiện cách đây 1 năm.",
-    history: [
-      { date: "15/08/2023", label: "Khám Nội khoa", note: "BS. Nguyễn Văn A • Đau dạ dày nhẹ" },
-      { date: "10/02/2023", label: "Khám Tổng quát", note: "BS. Lê Thị C • Bình thường" },
-    ],
-  },
-  "8945": {
-    name: "Lê Thị Mai",
-    meta: "Nữ, 62 Tuổi • #BN-8945",
-    phone: "0987 654 321",
-    aiSummary: "Khám sức khỏe tổng quát định kỳ hàng năm, chưa ghi nhận triệu chứng bất thường.",
-    history: [{ date: "10/02/2023", label: "Khám Tổng quát", note: "BS. Lê Thị C • Bình thường" }],
-  },
-  "8942": {
-    name: "Phạm Văn C",
-    meta: "Nam, 62 Tuổi • #BN-8942",
-    phone: "0901 234 567",
-    aiSummary:
-      "Đau ngực dữ dội, khó thở, lan ra tay trái. Nghi ngờ nhồi máu cơ tim (NMCT) - đã chuyển luồng cấp cứu khẩn cấp.",
-    history: [{ date: "15/08/2023", label: "Khám Nội khoa", note: "BS. Nguyễn Văn A • Cao huyết áp" }],
-  },
-};
+import { getLocalAppointments } from "@/lib/api/appointments";
+import type { DetailedAppointment } from "@/lib/mockData";
 
 export function PatientManagementView() {
-  const [selectedId, setSelectedId] = useState(rows[0].id);
-  const detail = details[selectedId];
+  const [appointments, setAppointments] = useState<DetailedAppointment[]>([]);
+  const [selectedId, setSelectedId] = useState<string>("");
+  const [activeFilter, setActiveFilter] = useState<string>("Tất cả");
+
+  const loadData = () => {
+    const list = getLocalAppointments();
+    setAppointments(list);
+    if (list.length > 0 && !selectedId) {
+      setSelectedId(list[0].id);
+    }
+  };
+
+  useEffect(() => {
+    loadData();
+    const handleUpdate = () => loadData();
+    window.addEventListener("focus", handleUpdate);
+    window.addEventListener("p208:schedule-change", handleUpdate);
+    window.addEventListener("vmec:appointments-change", handleUpdate);
+
+    return () => {
+      window.removeEventListener("focus", handleUpdate);
+      window.removeEventListener("p208:schedule-change", handleUpdate);
+      window.removeEventListener("vmec:appointments-change", handleUpdate);
+    };
+  }, []);
+
+  const rows: PatientRow[] = useMemo(() => {
+    return appointments.map((apt) => {
+      const isEmergency = apt.patientDetail.aiAssessment?.urgencyLevel === "EMERGENCY";
+      const isCompleted = apt.status === "COMPLETED";
+      const isConfirmed = apt.status === "CONFIRMED";
+
+      let statusLabel = "Chờ duyệt";
+      let tone: "neutral" | "warning" | "success" | "danger" = "warning";
+
+      if (isEmergency) {
+        statusLabel = "Cấp cứu";
+        tone = "danger";
+      } else if (isCompleted) {
+        statusLabel = "Đã khám";
+        tone = "success";
+      } else if (isConfirmed) {
+        statusLabel = "Đang khám";
+        tone = "neutral";
+      }
+
+      return {
+        id: apt.id,
+        initial: apt.patientDetail.fullName.charAt(0),
+        name: apt.patientDetail.fullName,
+        code: apt.patientDetail.medicalCode || `#APT-${apt.id.slice(-4)}`,
+        phone: apt.patientDetail.phoneNumber,
+        reason: apt.bookingReason || "Tư vấn triệu chứng lâm sàng",
+        department: `${apt.specialtyName} · ${apt.room || "P.Khám"}`,
+        status: { label: statusLabel, tone },
+        emergency: isEmergency,
+      };
+    });
+  }, [appointments]);
+
+  const selectedAppointment = appointments.find((a) => a.id === selectedId) || appointments[0];
+
+  const detail: PatientDetail | undefined = useMemo(() => {
+    if (!selectedAppointment) return undefined;
+    const detail = selectedAppointment.patientDetail;
+    const genderText = detail.gender === "MALE" ? "Nam" : detail.gender === "FEMALE" ? "Nữ" : "Khác";
+
+    return {
+      name: detail.fullName,
+      meta: `${genderText}, ${detail.age || 40} Tuổi • ${detail.medicalCode}`,
+      phone: detail.phoneNumber,
+      aiSummary: detail.aiAssessment?.reasoning || selectedAppointment.bookingReason || "Đã thu thập triệu chứng lâm sàng qua MedAgent AI.",
+      history: [
+        {
+          date: new Intl.DateTimeFormat("vi-VN", { dateStyle: "short" }).format(new Date(selectedAppointment.createdAt)),
+          label: selectedAppointment.specialtyName || "Khám chuyên khoa",
+          note: detail.clinicalNote || "Đang tiếp nhận thăm khám lâm sàng",
+        },
+      ],
+    };
+  }, [selectedAppointment]);
 
   return (
     <>
-      <PatientFilterTabs active="Đang khám" />
+      <PatientFilterTabs active={activeFilter} />
 
       <div className="mt-4 grid gap-6 lg:grid-cols-[1fr_360px]">
-        <PatientTable rows={rows} selectedId={selectedId} onSelect={setSelectedId} />
-        <PatientDetailPanel patient={detail} />
+        <PatientTable
+          rows={rows}
+          selectedId={selectedId || rows[0]?.id || ""}
+          onSelect={setSelectedId}
+        />
+        {detail ? (
+          <PatientDetailPanel patient={detail} />
+        ) : (
+          <div className="rounded-card border border-line bg-surface p-6 text-center text-ink-500">
+            Chưa có thông tin chi tiết bệnh nhân.
+          </div>
+        )}
       </div>
     </>
   );
