@@ -1,7 +1,8 @@
 /**
  * LLM 2: Clinical Evaluator & Slot Judge Module
- * Evaluates patient feedback with clinical reflection, ambiguity scoring,
- * progress calculation, and dynamic contextual Quick-Reply Chips.
+ * Evaluates patient feedback with ambiguity scoring, calculates progress %,
+ * generates contextual Quick-Reply Chips, and ONLY triggers RAG Vector Search & Evaluation
+ * when all 4 clinical slots are fully collected (100%).
  */
 
 import type {
@@ -60,12 +61,10 @@ function isPureGreeting(text: string): boolean {
 }
 
 /**
- * Tạo lời đánh giá phản hồi của người bệnh (Clinical Feedback Evaluation & Reflection)
- * Kết hợp dữ liệu lâm sàng sâu từ luồng RAG cũ (Chuyên khoa, Bác sĩ, Phác đồ BYT)
+ * Lời ghi nhận ngắn gọn trong các lượt hỏi làm rõ (Chưa chạy RAG)
  */
-function generateClinicalFeedbackEvaluation(
+function generateClarifyingAcknowledgment(
   slots: ClinicalSlotMatrix,
-  matchedSpec: typeof CLINICAL_SPECIALTIES[0],
   userText: string
 ): string {
   const parts: string[] = [];
@@ -84,14 +83,10 @@ function generateClinicalFeedbackEvaluation(
   }
 
   const summary = parts.length > 0 ? parts.join(", ") : `thông tin "${userText}"`;
-  const primaryCitation = matchedSpec.citations[0];
 
   return (
-    `🔍 **ĐÁNH GIÁ LÂM SÀNG TỪ HỆ THỐNG RAG BỘ Y TẾ:**\n` +
-    `• **Thông tin tiếp nhận:** Tôi đã ghi nhận ${summary}.\n` +
-    `• **Định tuyến sơ bộ:** **${matchedSpec.name}** — Bác sĩ phụ trách: **${matchedSpec.doctor}** (${matchedSpec.room}).\n` +
-    `• **Căn cứ chuyên môn:** ${matchedSpec.reasoning}\n` +
-    (primaryCitation ? `• **Phác đồ đối chiếu:** *${primaryCitation.label} (${primaryCitation.documentId})*\n\n` : `\n`)
+    `Tôi đã ghi nhận ${summary} vào hồ sơ khám.\n` +
+    `Để có đủ 4 tiêu chuẩn kích hoạt **RAG Vector Search đối chiếu phác đồ Bộ Y Tế**, bạn vui lòng làm rõ thêm:\n\n`
   );
 }
 
@@ -113,7 +108,7 @@ export function evaluateClinicalMessage(
       progressPercentage: 0,
       isAllCompleted: false,
       isEmergency: false,
-      nextQuestion: "Chào bạn! Tôi là **AI Trợ lý Khám bệnh Thông minh**. Bạn đang cảm thấy khó chịu ở vị trí nào trong cơ thể (như đau ngực, đau dạ dày, đau đầu, sốt,...) hoặc cần khám vấn đề sức khỏe gì?",
+      nextQuestion: "Chào bạn! Tôi là **AI Trợ lý Khám bệnh Thông minh**. Hãy chia sẻ về triệu chứng hoặc sự khó chịu bạn đang gặp phải (như đau ngực, đau dạ dày, đau đầu, sốt,...) để tôi hỗ trợ làm rõ và định tuyến chuyên khoa chính xác.",
       suggestedChips: [
         {
           id: "g_1",
@@ -156,10 +151,10 @@ export function evaluateClinicalMessage(
     };
   }
 
-  // 3. Nhận diện Chuyên khoa phù hợp nhất
+  // 3. Nhận diện Chuyên khoa (Chỉ kích hoạt RAG đầy đủ khi isAllCompleted = true)
   const matchedSpec = matchSpecialty(text) || CLINICAL_SPECIALTIES[0];
 
-  // 4. Phân tích bóc tách các trường lâm sàng (Slot Extractor)
+  // 4. Phân tích bóc tách 4 trường lâm sàng (Slot Extractor)
   // --- Slot 1: Chief Complaint ---
   if (slots.chiefComplaint.status !== "COMPLETED") {
     const hasMedical = MEDICAL_KEYWORDS.some((kw) => text.includes(kw));
@@ -230,7 +225,7 @@ export function evaluateClinicalMessage(
     }
   }
 
-  // 5. Tính toán phần trăm tiến độ
+  // 5. Tính toán phần trăm tiến độ (4 slots = 100%)
   let completedCount = 0;
   if (slots.chiefComplaint.status === "COMPLETED") completedCount++;
   if (slots.duration.status === "COMPLETED") completedCount++;
@@ -241,15 +236,12 @@ export function evaluateClinicalMessage(
   const isAllCompleted = completedCount >= 4 || (completedCount >= 3 && turnCount >= 2) || turnCount >= 4;
   const progressPercentage = isAllCompleted ? 100 : Math.min(75, completedCount * 25);
 
-  // Lời đánh giá phản hồi của người bệnh
-  const evaluationHeader = generateClinicalFeedbackEvaluation(slots, matchedSpec, userText);
-
   // 6. Xác định câu hỏi và 3-4 Quick-Chips ngữ cảnh tiếp theo
   let questionBody = "";
   let suggestedChips: ContextualChipOption[] = [];
 
   if (isAllCompleted) {
-    questionBody = `Tôi đã nắm bắt đầy đủ toàn bộ diễn biến triệu chứng của bạn. Đang đối chiếu phác đồ Bộ Y Tế và chuẩn bị kết luận chuyên khoa...`;
+    questionBody = `Đã thu thập đủ 4 trường thông tin lâm sàng. Đang tiến hành RAG Vector Search...`;
     suggestedChips = [];
   } else if (slots.characterTriggers.status !== "COMPLETED") {
     // Hỏi về tính chất & hoàn cảnh xuất hiện
@@ -368,7 +360,10 @@ export function evaluateClinicalMessage(
     ];
   }
 
-  const nextQuestion = isAllCompleted ? questionBody : `${evaluationHeader}${questionBody}`;
+  // Khi chưa hoàn tất, chỉ gửi lời làm rõ + câu hỏi (TUYỆT ĐỐI CHƯA HIỂN THỊ ĐÁNH GIÁ RAG)
+  const nextQuestion = isAllCompleted
+    ? questionBody
+    : `${generateClarifyingAcknowledgment(slots, userText)}${questionBody}`;
 
   return {
     updatedSlots: slots,

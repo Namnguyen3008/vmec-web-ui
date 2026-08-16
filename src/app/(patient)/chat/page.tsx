@@ -202,9 +202,7 @@ export default function ChatPage() {
           id: `msg_ai_${Date.now()}`,
           sender: "AI",
           content: aiReply,
-          citations: updatedContext.activeCitations.length > 0
-            ? updatedContext.activeCitations
-            : result.assistantMessage.citations,
+          citations: updatedContext.activeCitations,
           confidenceScore: 96,
         },
       ]);

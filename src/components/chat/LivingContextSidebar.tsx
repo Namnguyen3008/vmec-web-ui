@@ -211,30 +211,34 @@ export function LivingContextSidebar({
       </div>
 
       {/* Active Citations */}
-      {activeCitations && activeCitations.length > 0 && (
-        <div className="mt-3 space-y-1.5">
-          <div className="text-[10px] font-bold text-ink-400 uppercase tracking-wider flex items-center gap-1">
-            <ShieldCheck size={12} className="text-primary-600" />
-            <span>Phác Đồ BYT Tham Chiếu</span>
-          </div>
-          {activeCitations.map((cite, idx) => (
+      <div className="mt-3 space-y-1.5">
+        <div className="text-[10px] font-bold text-ink-400 uppercase tracking-wider flex items-center gap-1">
+          <ShieldCheck size={12} className="text-primary-600" />
+          <span>Phác Đồ BYT Tham Chiếu</span>
+        </div>
+        {activeCitations && activeCitations.length > 0 ? (
+          activeCitations.map((cite, idx) => (
             <div
               key={idx}
-              className="rounded-lg border border-line bg-surface p-2 text-[10px] shadow-2xs"
+              className="rounded-lg border border-emerald-200 bg-emerald-50/50 p-2 text-[10px] shadow-2xs"
             >
               <div className="font-bold text-ink-900 truncate flex items-center gap-1">
-                <FileText size={11} className="text-primary-700 shrink-0" />
+                <FileText size={11} className="text-emerald-700 shrink-0" />
                 <span>{cite.label}</span>
               </div>
               {cite.documentId && (
-                <div className="text-[9px] text-primary-700 font-mono mt-0.5">
+                <div className="text-[9px] text-emerald-800 font-mono mt-0.5">
                   {cite.documentId} ({cite.confidence || 96}%)
                 </div>
               )}
             </div>
-          ))}
-        </div>
-      )}
+          ))
+        ) : (
+          <div className="rounded-lg border border-dashed border-line bg-surface/40 p-2 text-[10px] text-ink-400 italic">
+            Chờ đủ 4 tiêu chuẩn để kích hoạt RAG Vector Search...
+          </div>
+        )}
+      </div>
 
       {/* Skip / Force Complete Button if not completed */}
       {!isCompleted && !isEmergency && onForceComplete && (
