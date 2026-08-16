@@ -3,6 +3,8 @@
 import { useState, type ReactNode } from "react";
 import { Bot, BookOpen, ShieldCheck, User, FileText, ChevronDown, ChevronUp, ExternalLink, Sparkles } from "lucide-react";
 
+import { ClinicalMessageRenderer } from "./ClinicalMessageRenderer";
+
 export interface CitationItem {
   sourceId?: string | null;
   documentId?: string | null;
@@ -42,9 +44,13 @@ export function AgentBubble({
       <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary-700 text-white shadow-xs">
         <Bot size={18} />
       </span>
-      <div className="max-w-xl space-y-2">
+      <div className="max-w-2xl flex-1 space-y-2">
         <div className="rounded-2xl rounded-tl-xs border border-line bg-surface px-5 py-4 text-body text-ink-900 shadow-2xs">
-          <div className="whitespace-pre-wrap">{children}</div>
+          {typeof children === "string" ? (
+            <ClinicalMessageRenderer content={children} />
+          ) : (
+            <div className="whitespace-pre-wrap">{children}</div>
+          )}
 
           {/* Enhanced Medical Citations Card */}
           {citations && citations.length > 0 && (
