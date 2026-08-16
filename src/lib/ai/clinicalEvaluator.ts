@@ -201,33 +201,8 @@ export function evaluateClinicalMessage(
       isAllCompleted: false,
       isEmergency: false,
       nextQuestion:
-        "Tôi là **AI Trợ lý Khám bệnh Thông minh (MedAgent)** của Bệnh viện Đa khoa Quốc tế VMEC. Theo chính sách an toàn **Google Model Armor** và quy chuẩn bảo mật y tế, tôi không cung cấp API key, mã bí mật hoặc thông tin cấu hình hệ thống.\n\nTôi luôn sẵn sàng lắng nghe và hỗ trợ bạn phân tích các triệu chứng sức khỏe, tư vấn chuyên khoa khám bệnh phù hợp. Bạn có đang gặp vấn đề gì về sức khỏe cần trợ giúp không?",
-      suggestedChips: [
-        {
-          id: "sec_1",
-          display: "Đau đầu nhói buốt dữ dội",
-          fullText: "Tôi bị đau đầu nhói buốt dữ dội từng cơn",
-          clinicalCategory: "NEURO",
-        },
-        {
-          id: "sec_2",
-          display: "Đau tức ngực trái khi gắng sức",
-          fullText: "Tôi bị đau tức ngực trái khi leo cầu thang và hồi hộp",
-          clinicalCategory: "CARDIAC",
-        },
-        {
-          id: "sec_3",
-          display: "Đau rát dạ dày, ợ chua",
-          fullText: "Tôi bị đau rát thượng vị (trên rốn) và ợ chua nhiều",
-          clinicalCategory: "GASTRO",
-        },
-        {
-          id: "sec_4",
-          display: "Tư vấn gói khám sức khỏe tổng quát",
-          fullText: "Tôi muốn được tư vấn gói khám sức khỏe tổng quát định kỳ",
-          clinicalCategory: "GENERAL",
-        },
-      ],
+        "Tôi là **AI Trợ lý Khám bệnh Thông minh (MedAgent)** của Bệnh viện Đa khoa Quốc tế VMEC. Theo chính sách an toàn thông tin và quy chuẩn bảo mật y tế của Bệnh viện, tôi không cung cấp API key, mật khẩu, database credentials hoặc thông tin cấu hình hệ thống.\n\nTôi luôn sẵn sàng lắng nghe và hỗ trợ bạn phân tích các triệu chứng sức khỏe, tư vấn chuyên khoa khám bệnh phù hợp. Nếu bạn đang gặp vấn đề gì về sức khỏe, hãy chia sẻ triệu chứng để tôi hỗ trợ nhé!",
+      suggestedChips: [],
     };
   }
 
@@ -241,32 +216,7 @@ export function evaluateClinicalMessage(
       isEmergency: false,
       nextQuestion:
         "Tôi là **AI Trợ lý Y tế & Khám bệnh**, chuyên tiếp nhận triệu chứng và hướng dẫn chuyên khoa khám bệnh tại Bệnh viện. Tôi chỉ có thể hỗ trợ các thông tin liên quan đến y tế và sức khỏe của bạn.\n\nNếu bạn hoặc người thân đang cảm thấy khó chịu hoặc cần khám bệnh, hãy chia sẻ triệu chứng cụ thể để tôi hỗ trợ nhé!",
-      suggestedChips: [
-        {
-          id: "off_1",
-          display: "Đau đầu nhức buốt",
-          fullText: "Tôi bị đau đầu nhói buốt từng cơn",
-          clinicalCategory: "NEURO",
-        },
-        {
-          id: "off_2",
-          display: "Đau tức ngực khó thở",
-          fullText: "Tôi bị đau tức ngực và cảm thấy khó thở",
-          clinicalCategory: "CARDIAC",
-        },
-        {
-          id: "off_3",
-          display: "Đau bụng, ợ nóng",
-          fullText: "Tôi bị đau bụng vùng thượng vị kèm ợ chua",
-          clinicalCategory: "GASTRO",
-        },
-        {
-          id: "off_4",
-          display: "Khám sức khỏe tổng quát",
-          fullText: "Tôi muốn đặt lịch khám sức khỏe tổng quát",
-          clinicalCategory: "GENERAL",
-        },
-      ],
+      suggestedChips: [],
     };
   }
 

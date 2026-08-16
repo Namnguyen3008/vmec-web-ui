@@ -42,14 +42,17 @@ const SECURITY_CREDENTIAL_PATTERNS = [
   /api\s*key/i,
   /apikey/i,
   /api_key/i,
-  /cung\s+cấp\s+(api|key|token|mật\s+khẩu|password)/i,
-  /cho\s+(tôi\s+)?xin\s+(api|key|token|mật\s+khẩu|password)/i,
+  /cung\s+cấp\s+(api|key|token|mật\s+khẩu|password|credentials|database)/i,
+  /cho\s+(tôi\s+)?xin\s+(api|key|token|mật\s+khẩu|password|credentials|database)/i,
+  /cần\s+(credentials|database|mật\s+khẩu|password|api\s*key)/i,
+  /credential/i,
+  /database\s+credentials/i,
+  /credentials\s+database/i,
   /system\s+prompt/i,
   /prompt\s+hệ\s+thống/i,
   /cấu\s+hình\s+hệ\s+thống/i,
   /mã\s+nguồn/i,
   /source\s*code/i,
-  /database\s+credentials/i,
 ];
 
 const VIETNAMESE_ID_PATTERN = /\b\d{9}\b|\b\d{12}\b/g;
@@ -114,10 +117,10 @@ export function sanitizeUserPromptSync(prompt: string): ModelArmorFilterResult {
   let safetyRefusalMessage: string | undefined;
   if (isBlocked) {
     safetyRefusalMessage =
-      "🛡️ **Cảnh Báo An Toàn (Google Model Armor):**\n\n" +
-      "Hệ thống MedAgent AI tuân thủ nghiêm ngặt quy chuẩn bảo mật y tế và chính sách an toàn **Google Model Armor** của Bộ Y Tế:\n" +
-      "- ❌ **Từ chối cung cấp API Key, mã bí mật hoặc cấu hình hệ thống.**\n" +
-      "- ❌ **Chặn các câu lệnh can thiệp cấu trúc prompt hoặc vượt quyền.**\n\n" +
+      "🛡️ **Thông Báo An Toàn & Bảo Mật:**\n\n" +
+      "Hệ thống MedAgent AI tuân thủ nghiêm ngặt quy định an toàn thông tin và quy chuẩn bảo mật y tế của Bệnh viện:\n" +
+      "- ❌ **Từ chối cung cấp API Key, mật khẩu, database credentials hoặc cấu hình hệ thống.**\n" +
+      "- ❌ **Chặn các câu lệnh can thiệp cấu trúc prompt hoặc vượt quyền hệ thống.**\n\n" +
       "💡 *Tôi chỉ hỗ trợ tiếp nhận và phân tích triệu chứng sức khỏe. Nếu bạn có bất kỳ khó chịu nào trong cơ thể, hãy chia sẻ để tôi hỗ trợ tư vấn chuyên khoa khám phù hợp nhé!*";
   }
 

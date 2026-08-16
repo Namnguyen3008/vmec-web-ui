@@ -60,7 +60,7 @@ export function updateLivingContextWithUserMessage(
       context: currentContext,
       replyText:
         armorResult.safetyRefusalMessage ||
-        "🛡️ **Cảnh Báo An Toàn (Google Model Armor):** MedAgent AI tuân thủ nghiêm ngặt chuẩn mực an toàn y tế và bảo mật của Bộ Y Tế. Vui lòng chỉ chia sẻ các triệu chứng sức khỏe để tôi có thể hỗ trợ bạn tốt nhất.",
+        "🛡️ **Thông Báo An Toàn & Bảo Mật:** MedAgent AI tuân thủ nghiêm ngặt quy định an toàn thông tin và bảo mật y tế của Bệnh viện. Vui lòng chỉ chia sẻ các triệu chứng sức khỏe để tôi có thể hỗ trợ bạn tốt nhất.",
     };
   }
 
