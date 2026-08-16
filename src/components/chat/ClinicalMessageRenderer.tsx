@@ -4,11 +4,11 @@ import React, { type ReactNode } from "react";
 import {
   Stethoscope,
   Building2,
-  FileCheck2,
-  HelpCircle,
+  FileText,
   Sparkles,
   UserCheck,
-  CheckCircle,
+  CheckCircle2,
+  ShieldCheck,
 } from "lucide-react";
 
 interface ClinicalMessageRendererProps {
@@ -19,7 +19,6 @@ interface ClinicalMessageRendererProps {
  * Parses markdown inline formatting (**bold**, *italic*, bullet points) into clean React elements
  */
 export function formatMarkdownInline(text: string): ReactNode[] {
-  // Split by bold (**...**) and italic (*...*)
   const tokens = text.split(/(\*\*.*?\*\*|\*.*?\*)/g);
 
   return tokens.map((token, index) => {
@@ -98,7 +97,7 @@ export function ClinicalMessageRenderer({ content }: ClinicalMessageRendererProp
               </span>
             </div>
             <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100/80 px-2.5 py-0.5 text-[11px] font-bold text-emerald-800 border border-emerald-300">
-              <CheckCircle size={11} className="text-emerald-700" />
+              <CheckCircle2 size={11} className="text-emerald-700" />
               Chuẩn Phác Đồ BYT
             </span>
           </div>
@@ -144,7 +143,7 @@ export function ClinicalMessageRenderer({ content }: ClinicalMessageRendererProp
           {/* Reference Guideline */}
           {routingData.guideline && (
             <div className="mt-2.5 flex items-start gap-2 text-2xs text-ink-600 rounded-lg bg-surface p-2 border border-line/60">
-              <FileCheck2 size={13} className="mt-0.5 text-emerald-600 shrink-0" />
+              <FileText size={13} className="mt-0.5 text-emerald-600 shrink-0" />
               <div>
                 <span className="font-bold text-ink-800">Phác đồ tham chiếu: </span>
                 <span className="italic">{routingData.guideline}</span>
@@ -184,7 +183,7 @@ export function ClinicalMessageRenderer({ content }: ClinicalMessageRendererProp
               className="rounded-xl border border-primary-200 bg-gradient-to-r from-primary-50/70 via-surface to-primary-50/40 p-3.5 text-body-sm shadow-2xs space-y-1.5"
             >
               <div className="flex items-center gap-1.5 text-xs font-bold text-primary-800">
-                <HelpCircle size={15} className="text-primary-700 shrink-0" />
+                <ShieldCheck size={15} className="text-primary-700 shrink-0" />
                 <span>Câu Hỏi Lâm Sàng Cần Làm Rõ:</span>
               </div>
               <div className="text-ink-900 font-medium pl-5">
