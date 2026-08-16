@@ -25,28 +25,7 @@ export function getOrCreateLivingContext(sessionId: string): LivingClinicalConte
     urgencyLevel: "ROUTINE",
     slots: createInitialSlots(),
     activeTargetSlot: "chiefComplaint",
-    suggestedChips: [
-      {
-        id: "init_1",
-        display: "Đau tức ngực trái khi gắng sức",
-        fullText: "Tôi bị đau tức ngực trái và hồi hộp khi đi lại, leo cầu thang",
-      },
-      {
-        id: "init_2",
-        display: "Đau rát vùng thượng vị, ợ chua",
-        fullText: "Tôi bị đau rát vùng trên rốn (thượng vị), cồn cào và ợ chua",
-      },
-      {
-        id: "init_3",
-        display: "Bé bị sốt và ho sổ mũi",
-        fullText: "Con tôi bị sốt 38.5 độ kèm theo ho và chảy nước mũi",
-      },
-      {
-        id: "init_4",
-        display: "Đau nửa đầu, hoa mắt chóng mặt",
-        fullText: "Tôi bị đau nhức nửa đầu bên phải kèm chóng mặt và khó ngủ",
-      },
-    ],
+    suggestedChips: [],
     activeCitations: [
       {
         sourceId: "BYT_STANDARDS_2026",
