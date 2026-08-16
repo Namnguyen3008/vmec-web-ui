@@ -78,6 +78,7 @@ export function updateLivingContextWithUserMessage(
   currentContext.assignedDoctorName = matchedSpec.doctor;
   currentContext.assignedRoom = matchedSpec.room;
   currentContext.activeCitations = matchedSpec.citations;
+  currentContext.vectorSearchMeta = evalResult.vectorSearchMeta;
 
   if (evalResult.isAllCompleted) {
     currentContext.urgencyLevel = "PRIORITY_LEVEL_2";
