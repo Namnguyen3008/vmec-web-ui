@@ -4,6 +4,7 @@ import { useState, type ReactNode } from "react";
 import { Bot, BookOpen, ShieldCheck, User, FileText, ChevronDown, ChevronUp, ExternalLink, Sparkles } from "lucide-react";
 
 import { ClinicalMessageRenderer } from "./ClinicalMessageRenderer";
+import type { PsychologicalSoothingPayload } from "@/lib/ai/types";
 
 export interface CitationItem {
   sourceId?: string | null;
@@ -27,8 +28,6 @@ export function UserBubble({ children }: { children: ReactNode }) {
     </div>
   );
 }
-
-import type { PsychologicalSoothingPayload } from "@/lib/ai/types";
 
 export function AgentBubble({
   children,
