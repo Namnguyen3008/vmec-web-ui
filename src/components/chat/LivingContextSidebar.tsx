@@ -69,8 +69,7 @@ export function LivingContextSidebar({
         </div>
       </div>
 
-      {/* Tiến Độ Thu Thập Hồ Sơ section temporarily hidden per user request */}
-      {/*
+      {/* Living Context Header */}
       <div className="border-b border-line py-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1.5">
@@ -82,6 +81,7 @@ export function LivingContextSidebar({
           </span>
         </div>
 
+        {/* Progress Bar */}
         <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-neutral-100">
           <div
             className={`h-full transition-all duration-500 rounded-full ${
@@ -95,7 +95,6 @@ export function LivingContextSidebar({
           />
         </div>
       </div>
-      */}
 
       {/* Skip / Force Complete Button if not completed */}
       {!isCompleted && !isEmergency && onForceComplete && (

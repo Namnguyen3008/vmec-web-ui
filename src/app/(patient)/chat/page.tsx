@@ -324,7 +324,7 @@ export default function ChatPage() {
               Hội chẩn định tuyến & giữ chỗ khám theo chuẩn Bộ Y Tế
             </p>
           </div>
-          {/* AgentObservabilityButton temporarily hidden per user request */}
+          {/* AgentObservabilityButton - Temporarily hidden per user request */}
           {/*
           <AgentObservabilityButton
             context={livingContext}
@@ -335,22 +335,20 @@ export default function ChatPage() {
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Mobile Observability Button temporarily hidden */}
+          {/* Mobile Observability Button & Mobile Living Context Button - Temporarily hidden */}
           {/*
           <div className="sm:hidden">
             <AgentObservabilityButton context={livingContext} messages={messages} />
           </div>
-          */}
-
-          {/* Mobile Living Context Button */}
           <button
             type="button"
             onClick={() => setShowMobileSidebar(!showMobileSidebar)}
             className="md:hidden flex items-center gap-1.5 rounded-lg border border-line bg-surface px-2.5 py-1 text-xs font-semibold text-primary-800"
           >
             <PanelRightOpen size={14} />
-            <span>Quy trình ({currentStep}/4)</span>
+            <span>Hồ sơ ({livingContext.progressPercentage}%)</span>
           </button>
+          */}
 
           <Button
             type="button"
@@ -491,16 +489,19 @@ export default function ChatPage() {
           />
         </div>
 
-        {/* Right Column: Compact Living Clinical Context Window with 4-step progress */}
+        {/* Right Column: Compact Living Clinical Context Window - Temporarily hidden per user request */}
+        {/*
         <LivingContextSidebar
           context={livingContext}
           currentStep={currentStep}
           onForceComplete={handleForceComplete}
           className="w-72 lg:w-80 shrink-0 hidden md:flex"
         />
+        */}
       </div>
 
-      {/* Mobile Drawer for Living Context */}
+      {/* Mobile Drawer for Living Context - Temporarily hidden */}
+      {/*
       {showMobileSidebar && (
         <div className="fixed inset-0 z-50 flex justify-end bg-black/50 backdrop-blur-xs md:hidden">
           <div className="relative w-5/6 max-w-xs h-full bg-surface shadow-2xl flex flex-col">
@@ -527,6 +528,7 @@ export default function ChatPage() {
           </div>
         </div>
       )}
+      */}
     </div>
   );
 }
