@@ -9,7 +9,7 @@ import { createInitialSlots, evaluateClinicalMessage } from "./clinicalEvaluator
 import { CLINICAL_SPECIALTIES, generateOffers } from "@/lib/api/chat";
 import { generatePsychologicalSoothing } from "./psychologySpecialist";
 import { recordClinicalEvent } from "./observabilityRecorder";
-import { sanitizeUserPrompt } from "./modelArmorClient";
+import { sanitizeUserPromptSync } from "./modelArmorClient";
 
 const MEMORY_CACHE = new Map<string, LivingClinicalContext>();
 
@@ -41,26 +41,26 @@ export function updateLivingContextWithUserMessage(
 ): { context: LivingClinicalContext; replyText: string } {
   const currentContext = getOrCreateLivingContext(sessionId);
 
-  // 0. Google Model Armor AI Safety & Prompt Injection Check
-  // (Synchronous sanitization check)
-  const armorCheck = {
-    isJailbreak: /ignore\s+(all\s+)?previous\s+instructions|you\s+are\s+now\s+(DAN|unfiltered)|forget\s+(your\s+)?system|bỏ\s+qua\s+hướng\s+dẫn/i.test(userMessage),
-  };
+  // 0. Google Model Armor AI Safety & Gateway Interceptor
+  const armorResult = sanitizeUserPromptSync(userMessage);
 
-  if (armorCheck.isJailbreak) {
+  if (!armorResult.isSafe) {
+    currentContext.suggestedChips = []; // Clear chips on security violations
     recordClinicalEvent(sessionId, {
       sessionId,
       turnNumber: currentContext.turnCount + 1,
       eventType: "PATIENT_MESSAGE_INGESTED",
       component: "ModelArmorShield",
-      summary: "Google Model Armor: Đã phát hiện và chặn đứng nỗ lực Prompt Injection / Jailbreak",
-      payload: { rawText: userMessage, blocked: true, reason: "PROMPT_INJECTION_DETECTED" },
+      summary: `Google Model Armor: Đã phát hiện và chặn đứng truy vấn vi phạm an toàn (${armorResult.violations.map((v) => v.rule).join(", ")})`,
+      payload: { rawText: userMessage, blocked: true, violations: armorResult.violations },
       provenanceCheck: { passed: false, allowedAsPatientFact: false },
     });
 
     return {
       context: currentContext,
-      replyText: "⚠️ **Cảnh Báo An Toàn (Google Model Armor):** MedAgent AI tuân thủ nghiêm ngặt chuẩn mực an toàn y tế và bảo mật của Bộ Y Tế. Vui lòng chỉ chia sẻ các triệu chứng sức khỏe để tôi có thể hỗ trợ bạn tốt nhất.",
+      replyText:
+        armorResult.safetyRefusalMessage ||
+        "🛡️ **Cảnh Báo An Toàn (Google Model Armor):** MedAgent AI tuân thủ nghiêm ngặt chuẩn mực an toàn y tế và bảo mật của Bộ Y Tế. Vui lòng chỉ chia sẻ các triệu chứng sức khỏe để tôi có thể hỗ trợ bạn tốt nhất.",
     };
   }
 
