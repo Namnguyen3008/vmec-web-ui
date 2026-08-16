@@ -108,6 +108,8 @@ export function updateLivingContextWithUserMessage(
   }
 
   // Đang trong tiến trình hỏi làm rõ
+  currentContext.appointmentOffers = [];
+  currentContext.soothingPayload = null;
   currentContext.suggestedChips = evalResult.suggestedChips;
   currentContext.currentQuestion = evalResult.nextQuestion;
 

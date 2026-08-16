@@ -393,6 +393,8 @@ export async function sendChatMessage(sessionId: string, content: string): Promi
 
     let replyContent = "";
     let citations = matched.citations;
+    let availableOffers = offers;
+    let state = "OFFERS_READY";
 
     if (isEmergency) {
       replyContent = `🚨 **CẢNH BÁO CẤP CỨU KHẨN CẤP 115**:\n\nTriệu chứng của bạn có dấu hiệu nguy kịch đe dọa tính mạng theo quy chuẩn BYT. Vui lòng gọi ngay **115** hoặc người nhà đưa đến Khoa Cấp cứu gần nhất ngay lập tức! Tuyệt đối không tự ý lái xe.`;
@@ -407,12 +409,8 @@ export async function sendChatMessage(sessionId: string, content: string): Promi
           snippet: "Bệnh nhân có triệu chứng đau ngực dữ dội, khó thở vã mồ hôi hoặc méo miệng liệt nửa người phải được chuyển ngay vào phòng Hồi sức Cấp cứu.",
         },
       ];
-    } else {
-      replyContent = `Chào bạn! Dựa trên triệu chứng bạn vừa chia sẻ, AI đã phân tích theo cơ sở dữ liệu 2.670 tài liệu y tế chuẩn:\n\n` +
-        `🏥 **Chuyên khoa đề xuất:** **${matched.name}**\n` +
-        `👨‍⚕️ **Bác sĩ phụ trách:** **${matched.doctor}**\n` +
-        `💡 **Nhận định sơ bộ:** ${matched.reasoning}\n\n` +
-        `Dưới đây là các khung giờ khám khả dụng sắp tới. Bạn vui lòng chọn khung giờ phù hợp bên dưới để giữ chỗ gửi Lễ tân duyệt:`;
+      availableOffers = [];
+      state = "EMERGENCY_TRIGGERED";
     }
 
     const assistantMessage: ChatMessage = {
@@ -444,11 +442,11 @@ export async function sendChatMessage(sessionId: string, content: string): Promi
         reasonCodes: isEmergency ? ["RED_FLAG_ACUTE"] : [],
         actionMessage: isEmergency ? "Hãy gọi 115 hoặc đến cấp cứu ngay lập tức!" : null,
       },
-      workflowState: isEmergency ? "EMERGENCY_TRIGGERED" : "OFFERS_READY",
+      workflowState: state,
       missingFields: [],
       availableActions: actions,
-      appointmentOffer: offers[0],
-      appointmentOffers: offers,
+      appointmentOffer: availableOffers[0] || null,
+      appointmentOffers: availableOffers,
     };
   }
 }

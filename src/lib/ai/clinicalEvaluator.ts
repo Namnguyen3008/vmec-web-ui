@@ -1,7 +1,7 @@
 /**
  * LLM 2: Clinical Evaluator & Slot Judge Module
- * Evaluates ambiguity of clinical slots, calculates progress %,
- * and dynamically generates 3-4 contextual Quick-Reply Chips.
+ * Evaluates ambiguity of clinical slots, prevents greeting pollution,
+ * calculates progress %, and dynamically generates 3-4 contextual Quick-Reply Chips.
  */
 
 import type {
@@ -9,7 +9,6 @@ import type {
   ContextualChipOption,
   LivingClinicalContext,
   SlotEvaluationResult,
-  TriageUrgencyLevel,
 } from "./types";
 import { CLINICAL_SPECIALTIES, detectEmergency, matchSpecialty } from "@/lib/api/chat";
 
@@ -41,6 +40,26 @@ export function createInitialSlots(): ClinicalSlotMatrix {
   };
 }
 
+const MEDICAL_KEYWORDS = [
+  "ngực", "tim", "bụng", "dạ dày", "đầu", "họng", "sốt", "khớp", "da", "mắt",
+  "cháu", "bé", "ho", "thở", "ợ", "chóng mặt", "buồn nôn", "mệt", "đau",
+  "nhức", "rát", "sưng", "ngứa", "tiêu chảy", "huyết áp", "khó ngủ"
+];
+
+function isPureGreeting(text: string): boolean {
+  const lower = text.toLowerCase().trim();
+  const greetingPhrases = [
+    "xin chào", "chào bạn", "chào bác sĩ", "chào", "hello", "hi", "hey",
+    "xin chao", "chao ban", "chao bac si", "bạn ơi", "alo", "chào em", "chào anh"
+  ];
+
+  const hasGreeting = greetingPhrases.some((g) => lower === g || lower.startsWith(g + " ") || lower.startsWith(g + ","));
+  const hasMedical = MEDICAL_KEYWORDS.some((kw) => lower.includes(kw));
+
+  // Là chào hỏi thuần túy nếu có từ chào nhưng KHÔNG chứa bất kỳ từ khóa bệnh nào
+  return hasGreeting && !hasMedical;
+}
+
 /**
  * Main Evaluation Function (LLM-as-a-Judge Clinical Slot Evaluator)
  */
@@ -52,7 +71,44 @@ export function evaluateClinicalMessage(
   const slots: ClinicalSlotMatrix = { ...currentContext.slots };
   const turnCount = currentContext.turnCount + 1;
 
-  // 1. Kiểm tra Cấp cứu 115 độc lập (TriAgent Circuit Breaker)
+  // 1. XỬ LÝ CHÀO HỎI THUẦN TÚY (Greeting Guard) - KHÔNG ghi nhận triệu chứng giả
+  if (isPureGreeting(text)) {
+    return {
+      updatedSlots: slots,
+      progressPercentage: 0,
+      isAllCompleted: false,
+      isEmergency: false,
+      nextQuestion: "Chào bạn! Tôi là **AI Trợ lý Khám bệnh Thông minh**. Bạn đang cảm thấy khó chịu ở vị trí nào trong cơ thể (như đau ngực, đau dạ dày, đau đầu, sốt,...) hoặc cần khám vấn đề sức khỏe gì?",
+      suggestedChips: [
+        {
+          id: "g_1",
+          display: "Đau tức ngực trái khi gắng sức",
+          fullText: "Tôi bị đau tức ngực trái khi leo cầu thang và hồi hộp",
+          clinicalCategory: "CARDIAC",
+        },
+        {
+          id: "g_2",
+          display: "Đau rát dạ dày, ợ chua",
+          fullText: "Tôi bị đau rát thượng vị (trên rốn) và ợ chua nhiều",
+          clinicalCategory: "GASTRO",
+        },
+        {
+          id: "g_3",
+          display: "Đau nhức đầu, chóng mặt",
+          fullText: "Tôi bị đau nhức nửa đầu bên phải kèm chóng mặt",
+          clinicalCategory: "NEURO",
+        },
+        {
+          id: "g_4",
+          display: "Bé bị sốt và ho sổ mũi",
+          fullText: "Con tôi bị sốt 38.5 độ kèm theo ho và chảy nước mũi",
+          clinicalCategory: "PEDIATRIC",
+        },
+      ],
+    };
+  }
+
+  // 2. Kiểm tra Cấp cứu 115 độc lập (TriAgent Circuit Breaker)
   const isEmergency = detectEmergency(text);
   if (isEmergency) {
     return {
@@ -65,33 +121,17 @@ export function evaluateClinicalMessage(
     };
   }
 
-  // 2. Nhận diện Chuyên khoa phù hợp nhất
+  // 3. Nhận diện Chuyên khoa phù hợp nhất
   const matchedSpec = matchSpecialty(text) || CLINICAL_SPECIALTIES[0];
 
-  // 3. Phân tích bóc tách các trường lâm sàng (Slot Extractor)
+  // 4. Phân tích bóc tách các trường lâm sàng (Slot Extractor)
   // --- Slot 1: Chief Complaint ---
   if (slots.chiefComplaint.status !== "COMPLETED") {
-    if (
-      text.includes("ngực") ||
-      text.includes("tim") ||
-      text.includes("bụng") ||
-      text.includes("dạ dày") ||
-      text.includes("đầu") ||
-      text.includes("họng") ||
-      text.includes("sốt") ||
-      text.includes("khớp") ||
-      text.includes("da") ||
-      text.includes("mắt") ||
-      text.includes("cháu") ||
-      text.includes("bé")
-    ) {
+    const hasMedical = MEDICAL_KEYWORDS.some((kw) => text.includes(kw));
+    if (hasMedical) {
       slots.chiefComplaint.status = "COMPLETED";
       slots.chiefComplaint.value = userText.trim();
       slots.chiefComplaint.clarityScore = 0.95;
-    } else {
-      slots.chiefComplaint.status = "IN_PROGRESS";
-      slots.chiefComplaint.value = userText.trim();
-      slots.chiefComplaint.clarityScore = 0.6;
     }
   }
 
@@ -155,18 +195,18 @@ export function evaluateClinicalMessage(
     }
   }
 
-  // 4. Tính toán phần trăm tiến độ
+  // 5. Tính toán phần trăm tiến độ
   let completedCount = 0;
   if (slots.chiefComplaint.status === "COMPLETED") completedCount++;
   if (slots.duration.status === "COMPLETED") completedCount++;
   if (slots.characterTriggers.status === "COMPLETED") completedCount++;
   if (slots.associatedSigns.status === "COMPLETED") completedCount++;
 
-  // Giới hạn cứng: Nếu đã qua 3 lượt hoặc đã hoàn tất cả 4 slot -> Hoàn thành 100%
-  const isAllCompleted = completedCount >= 4 || turnCount >= 3 || (completedCount >= 3 && turnCount >= 2);
-  const progressPercentage = isAllCompleted ? 100 : Math.max(25, completedCount * 25);
+  // Quy tắc dừng: Đủ 4 slot HOẶC đã qua 3 lượt hỏi có triệu chứng rõ ràng
+  const isAllCompleted = completedCount >= 4 || (completedCount >= 3 && turnCount >= 2) || turnCount >= 4;
+  const progressPercentage = isAllCompleted ? 100 : Math.min(75, completedCount * 25);
 
-  // 5. Xác định câu hỏi và 3-4 Quick-Chips ngữ cảnh tiếp theo
+  // 6. Xác định câu hỏi và 3-4 Quick-Chips ngữ cảnh tiếp theo
   let nextQuestion = "";
   let suggestedChips: ContextualChipOption[] = [];
 
@@ -261,7 +301,6 @@ export function evaluateClinicalMessage(
       ];
     }
   } else if (slots.duration.status !== "COMPLETED" || slots.associatedSigns.status !== "COMPLETED") {
-    // Hỏi về thời gian & dấu hiệu kèm theo
     nextQuestion = "Tình trạng này đã kéo dài bao lâu rồi, và bạn có kèm theo triệu chứng nào khác không?";
     suggestedChips = [
       {

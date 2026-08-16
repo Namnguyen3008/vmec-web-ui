@@ -193,15 +193,13 @@ export default function ChatPage() {
 
       const result = await sendChatMessage(activeSessionId, trimmed);
 
-      const aiReply =
-        updatedContext.isCompleted || updatedContext.isEmergency
-          ? replyText
-          : result.assistantMessage.content || replyText;
+      // Luôn ưu tiên phản hồi từ Multi-turn Clinical Evaluator
+      const aiReply = replyText;
 
       setMessages((current) => [
         ...current,
         {
-          id: result.assistantMessage.id,
+          id: `msg_ai_${Date.now()}`,
           sender: "AI",
           content: aiReply,
           citations: updatedContext.activeCitations.length > 0
@@ -215,10 +213,10 @@ export default function ChatPage() {
         setOffers(updatedContext.appointmentOffers);
         setLastRawOfferText(aiReply);
         setActions(["ACCEPT_APPOINTMENT", "CHANGE_APPOINTMENT", "DECLINE_APPOINTMENT"]);
-      } else if (result.appointmentOffers && result.appointmentOffers.length > 0) {
-        setOffers(result.appointmentOffers);
-        setLastRawOfferText(result.assistantMessage.content);
-        setActions(result.availableActions);
+      } else {
+        setOffers([]);
+        setLastRawOfferText("");
+        setActions([]);
       }
 
       if (result.emergency?.detected || updatedContext.isEmergency) {
