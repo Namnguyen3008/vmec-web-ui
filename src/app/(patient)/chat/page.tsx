@@ -40,6 +40,13 @@ interface UiMessage {
 
 const CHAT_SESSION_LIFETIME_MS = 24 * 60 * 60 * 1000;
 
+const INITIAL_WELCOME_MESSAGE: UiMessage = {
+  id: "msg_welcome_init",
+  sender: "AI",
+  content:
+    "Chào bạn! Tôi là **AI Trợ lý Khám bệnh Thông minh**. Hãy chia sẻ về triệu chứng hoặc sự khó chịu bạn đang gặp phải. Tôi sẽ cùng bạn lắng nghe, làm rõ tình trạng và định hướng chuyên khoa chính xác nhất.",
+};
+
 function toUiMessage(message: ChatMessage): UiMessage {
   return {
     id: message.id,
@@ -66,7 +73,7 @@ function toUiMessage(message: ChatMessage): UiMessage {
 
 export default function ChatPage() {
   const [sessionId, setSessionId] = useState<string | null>(null);
-  const [messages, setMessages] = useState<UiMessage[]>([]);
+  const [messages, setMessages] = useState<UiMessage[]>([INITIAL_WELCOME_MESSAGE]);
   const [input, setInput] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [isRestoring, setIsRestoring] = useState(true);
@@ -105,7 +112,7 @@ export default function ChatPage() {
         if (cancelled) return;
 
         setSessionId(latestSession.id);
-        setMessages(history.map(toUiMessage));
+        setMessages(history.length > 0 ? history.map(toUiMessage) : [INITIAL_WELCOME_MESSAGE]);
 
         const lastAssistantMessage = [...history]
           .reverse()
@@ -281,7 +288,7 @@ export default function ChatPage() {
 
   async function resetChat() {
     setSessionId(null);
-    setMessages([]);
+    setMessages([INITIAL_WELCOME_MESSAGE]);
     setInput("");
     setError(null);
     setEmergency(null);
@@ -356,11 +363,6 @@ export default function ChatPage() {
         {/* Left Column: Conversational Stream (Maximized Screen Area) */}
         <div className="flex flex-1 flex-col justify-between overflow-hidden">
           <div className="flex-1 space-y-4 overflow-y-auto p-4 sm:p-6" aria-live="polite">
-            {messages.length === 0 && (
-              <AgentBubble>
-                Chào bạn! Tôi là **AI Trợ lý Khám bệnh Thông minh**. Hãy chia sẻ về triệu chứng hoặc sự khó chịu bạn đang gặp phải. Tôi sẽ cùng bạn lắng nghe, làm rõ tình trạng và định hướng chuyên khoa chính xác nhất.
-              </AgentBubble>
-            )}
 
             {/* Message Feed */}
             {messages.map((message) =>
