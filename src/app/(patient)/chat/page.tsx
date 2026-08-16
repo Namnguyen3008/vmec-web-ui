@@ -5,6 +5,7 @@ import { UserBubble, AgentBubble, TypingDots, type CitationItem } from "@/compon
 import { LivingContextSidebar } from "@/components/chat/LivingContextSidebar";
 import { ContextualQuickChips } from "@/components/chat/ContextualQuickChips";
 import { PsychologicalSoothingCard } from "@/components/chat/PsychologicalSoothingCard";
+import { AgentObservabilityButton } from "@/components/chat/AgentObservabilityButton";
 import { ChatInput } from "@/components/chat/ChatInput";
 import { BookingCheckout } from "@/components/chat/BookingCheckout";
 import { AppointmentQrCard } from "@/components/bookings/AppointmentQrCard";
@@ -318,9 +319,19 @@ export default function ChatPage() {
               Hội chẩn định tuyến & giữ chỗ khám theo chuẩn Bộ Y Tế
             </p>
           </div>
+          <AgentObservabilityButton
+            context={livingContext}
+            messages={messages}
+            className="ml-3 hidden sm:flex"
+          />
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Mobile Observability Button */}
+          <div className="sm:hidden">
+            <AgentObservabilityButton context={livingContext} messages={messages} />
+          </div>
+
           {/* Mobile Living Context Button */}
           <button
             type="button"
