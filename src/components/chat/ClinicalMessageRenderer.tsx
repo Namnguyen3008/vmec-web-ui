@@ -1,6 +1,6 @@
 "use client";
 
-import React, { type ReactNode } from "react";
+import React from "react";
 import {
   Stethoscope,
   Building2,
@@ -18,26 +18,30 @@ interface ClinicalMessageRendererProps {
 /**
  * Parses markdown inline formatting (**bold**, *italic*, bullet points) into clean React elements
  */
-export function formatMarkdownInline(text: string): ReactNode[] {
+export function formatMarkdownInline(text: string): React.ReactNode {
   const tokens = text.split(/(\*\*.*?\*\*|\*.*?\*)/g);
 
-  return tokens.map((token, index) => {
-    if (token.startsWith("**") && token.endsWith("**")) {
-      return (
-        <strong key={index} className="font-bold text-ink-900">
-          {token.slice(2, -2)}
-        </strong>
-      );
-    }
-    if (token.startsWith("*") && token.endsWith("*") && token.length > 2) {
-      return (
-        <em key={index} className="italic text-ink-700 font-medium">
-          {token.slice(1, -1)}
-        </em>
-      );
-    }
-    return <span key={index}>{token}</span>;
-  });
+  return (
+    <>
+      {tokens.map((token, index) => {
+        if (token.startsWith("**") && token.endsWith("**")) {
+          return (
+            <strong key={index} className="font-bold text-ink-900">
+              {token.slice(2, -2)}
+            </strong>
+          );
+        }
+        if (token.startsWith("*") && token.endsWith("*") && token.length > 2) {
+          return (
+            <em key={index} className="italic text-ink-700 font-medium">
+              {token.slice(1, -1)}
+            </em>
+          );
+        }
+        return <span key={index}>{token}</span>;
+      })}
+    </>
+  );
 }
 
 /**
@@ -51,8 +55,8 @@ function parseRoutingSection(content: string) {
 
   if (!isRoutingProposal) return null;
 
-  // Extract fields via Regex
-  const introMatch = content.match(/^(.*?)(?=🏥|\n\s*•|\n\s*CHUYÊN KHOA)/s);
+  // Extract fields via standard RegExp (no /s flag)
+  const introMatch = content.match(/^([\s\S]*?)(?=🏥|\n\s*•|\n\s*CHUYÊN KHOA)/);
   const specMatch = content.match(/(?:CHUYÊN KHOA (?:ĐỀ XUẤT|CHỈ ĐỊNH):?\s*)(?:\*\*)?([^\n*]+)(?:\*\*)?/i);
   const docMatch = content.match(/(?:BÁC SĨ PHỤ TRÁCH:?\s*)(?:\*\*)?([^\n*(]+)(?:\*\*)?(?:\s*\(([^)]+)\))?/i);
   const reasonMatch = content.match(/(?:NHẬN ĐỊNH LÂM SÀNG SƠ BỘ|CĂN CỨ CHUYÊN MÔN):?\s*([^\n]+(?:\n[^\n📚👇]+)*)/i);
