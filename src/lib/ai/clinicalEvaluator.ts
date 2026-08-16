@@ -45,6 +45,32 @@ const MEDICAL_KEYWORDS = [
   "nhức", "rát", "sưng", "ngứa", "tiêu chảy", "huyết áp", "khó ngủ", "hụt hơi", "đau đầu"
 ];
 
+function isSecurityOrSystemInquiry(text: string): boolean {
+  const lower = text.toLowerCase().trim();
+  const securityPhrases = [
+    "api key", "apikey", "api_key", "api-key", "token", "secret", "password", "mật khẩu",
+    "system prompt", "prompt hệ thống", "cấu hình hệ thống", "mã nguồn", "source code",
+    "admin", "root", "database", "cơ sở dữ liệu", "mã khóa", "hướng dẫn hệ thống", "cung cấp key",
+    "cung cấp api", "cho xin key", "cho xin api"
+  ];
+  return securityPhrases.some((phrase) => lower.includes(phrase));
+}
+
+function isOffTopicNonMedical(text: string, currentSlots: ClinicalSlotMatrix): boolean {
+  const lower = text.toLowerCase().trim();
+  if (currentSlots.chiefComplaint.status === "COMPLETED") return false;
+
+  const hasMedical = MEDICAL_KEYWORDS.some((kw) => lower.includes(kw));
+  if (hasMedical) return false;
+
+  const offTopicKeywords = [
+    "thời tiết", "bài thơ", "kể chuyện", "chuyện cười", "viết code", "lập trình",
+    "python", "javascript", "bitcoin", "chứng khoán", "ca sĩ", "bài hát", "phim",
+    "bóng đá", "thời sự", "tin tức", "bao nhiêu tuổi", "ai tạo ra bạn", "bạn là ai"
+  ];
+  return offTopicKeywords.some((kw) => lower.includes(kw));
+}
+
 function isPureGreeting(text: string): boolean {
   const lower = text.toLowerCase().trim();
   const greetingPhrases = [
@@ -165,6 +191,84 @@ export function evaluateClinicalMessage(
   const slots: ClinicalSlotMatrix = { ...currentContext.slots };
   const existingFacts: AtomicClinicalFact[] = [...(currentContext.atomicFacts || [])];
   const turnCount = currentContext.turnCount + 1;
+
+  // 0. XỬ LÝ YÊU CẦU BẢO MẬT & API KEY / SYSTEM SECRETS (Security Guard)
+  if (isSecurityOrSystemInquiry(text)) {
+    return {
+      updatedSlots: slots,
+      atomicFacts: existingFacts,
+      progressPercentage: slots.chiefComplaint.status === "COMPLETED" ? 50 : 0,
+      isAllCompleted: false,
+      isEmergency: false,
+      nextQuestion:
+        "Tôi là **AI Trợ lý Khám bệnh Thông minh (MedAgent)** của Bệnh viện Đa khoa Quốc tế VMEC. Theo chính sách an toàn **Google Model Armor** và quy chuẩn bảo mật y tế, tôi không cung cấp API key, mã bí mật hoặc thông tin cấu hình hệ thống.\n\nTôi luôn sẵn sàng lắng nghe và hỗ trợ bạn phân tích các triệu chứng sức khỏe, tư vấn chuyên khoa khám bệnh phù hợp. Bạn có đang gặp vấn đề gì về sức khỏe cần trợ giúp không?",
+      suggestedChips: [
+        {
+          id: "sec_1",
+          display: "Đau đầu nhói buốt dữ dội",
+          fullText: "Tôi bị đau đầu nhói buốt dữ dội từng cơn",
+          clinicalCategory: "NEURO",
+        },
+        {
+          id: "sec_2",
+          display: "Đau tức ngực trái khi gắng sức",
+          fullText: "Tôi bị đau tức ngực trái khi leo cầu thang và hồi hộp",
+          clinicalCategory: "CARDIAC",
+        },
+        {
+          id: "sec_3",
+          display: "Đau rát dạ dày, ợ chua",
+          fullText: "Tôi bị đau rát thượng vị (trên rốn) và ợ chua nhiều",
+          clinicalCategory: "GASTRO",
+        },
+        {
+          id: "sec_4",
+          display: "Tư vấn gói khám sức khỏe tổng quát",
+          fullText: "Tôi muốn được tư vấn gói khám sức khỏe tổng quát định kỳ",
+          clinicalCategory: "GENERAL",
+        },
+      ],
+    };
+  }
+
+  // 0.1 XỬ LÝ CÂU HỎI NGOÀI PHẠM VI Y TẾ (Off-topic Non-medical Guard)
+  if (isOffTopicNonMedical(text, slots)) {
+    return {
+      updatedSlots: slots,
+      atomicFacts: existingFacts,
+      progressPercentage: 0,
+      isAllCompleted: false,
+      isEmergency: false,
+      nextQuestion:
+        "Tôi là **AI Trợ lý Y tế & Khám bệnh**, chuyên tiếp nhận triệu chứng và hướng dẫn chuyên khoa khám bệnh tại Bệnh viện. Tôi chỉ có thể hỗ trợ các thông tin liên quan đến y tế và sức khỏe của bạn.\n\nNếu bạn hoặc người thân đang cảm thấy khó chịu hoặc cần khám bệnh, hãy chia sẻ triệu chứng cụ thể để tôi hỗ trợ nhé!",
+      suggestedChips: [
+        {
+          id: "off_1",
+          display: "Đau đầu nhức buốt",
+          fullText: "Tôi bị đau đầu nhói buốt từng cơn",
+          clinicalCategory: "NEURO",
+        },
+        {
+          id: "off_2",
+          display: "Đau tức ngực khó thở",
+          fullText: "Tôi bị đau tức ngực và cảm thấy khó thở",
+          clinicalCategory: "CARDIAC",
+        },
+        {
+          id: "off_3",
+          display: "Đau bụng, ợ nóng",
+          fullText: "Tôi bị đau bụng vùng thượng vị kèm ợ chua",
+          clinicalCategory: "GASTRO",
+        },
+        {
+          id: "off_4",
+          display: "Khám sức khỏe tổng quát",
+          fullText: "Tôi muốn đặt lịch khám sức khỏe tổng quát",
+          clinicalCategory: "GENERAL",
+        },
+      ],
+    };
+  }
 
   // 1. XỬ LÝ CHÀO HỎI THUẦN TÚY (Greeting Guard)
   if (isPureGreeting(text)) {
@@ -446,33 +550,63 @@ export function evaluateClinicalMessage(
         },
       ];
     } else {
-      questionBody = "Triệu chứng khó chịu này có cảm giác cụ thể như thế nào và tăng lên khi nào?";
-      suggestedChips = [
-        {
-          id: "gen_c1",
-          display: "Đau nhức âm ỉ liên tục",
-          fullText: "Tôi bị đau nhức âm ỉ kéo dài liên tục cả ngày",
-          clinicalCategory: "CHRONIC_MILD",
-        },
-        {
-          id: "gen_c2",
-          display: "Đau nhói từng cơn đột ngột",
-          fullText: "Thỉnh thoảng đau nhói buốt dữ dội từng cơn rồi giảm dần",
-          clinicalCategory: "ACUTE_PAROXYSMAL",
-        },
-        {
-          id: "gen_c3",
-          display: "Đau tăng khi vận động",
-          fullText: "Cơn đau tăng rõ rệt khi tôi cử động hoặc làm việc nặng",
-          clinicalCategory: "MECHANICAL",
-        },
-        {
-          id: "gen_c4",
-          display: "Khó chịu nhẹ, chưa rõ vị trí",
-          fullText: "Tôi chỉ cảm thấy bứt rứt khó chịu nhẹ trong người",
-          clinicalCategory: "UNSPECIFIED",
-        },
-      ];
+      if (slots.chiefComplaint.status !== "COMPLETED") {
+        questionBody = "Bạn đang cảm thấy khó chịu ở vị trí nào trong cơ thể? Vui lòng chia sẻ cụ thể hơn hoặc chọn một trong các gợi ý dưới đây để tôi hỗ trợ định tuyến chuyên khoa nhé:";
+        suggestedChips = [
+          {
+            id: "gen_c1",
+            display: "Đau đầu nhói buốt",
+            fullText: "Tôi bị đau đầu nhói buốt dữ dội từng cơn",
+            clinicalCategory: "NEURO",
+          },
+          {
+            id: "gen_c2",
+            display: "Đau tức ngực trái",
+            fullText: "Tôi bị đau tức ngực trái khi gắng sức",
+            clinicalCategory: "CARDIAC",
+          },
+          {
+            id: "gen_c3",
+            display: "Đau rát dạ dày, ợ chua",
+            fullText: "Tôi bị đau rát vùng thượng vị và ợ chua",
+            clinicalCategory: "GASTRO",
+          },
+          {
+            id: "gen_c4",
+            display: "Khám sức khỏe tổng quát",
+            fullText: "Tôi muốn đặt hẹn khám sức khỏe tổng quát",
+            clinicalCategory: "GENERAL",
+          },
+        ];
+      } else {
+        questionBody = "Triệu chứng khó chịu này có cảm giác cụ thể như thế nào và tăng lên khi nào?";
+        suggestedChips = [
+          {
+            id: "gen_c1",
+            display: "Đau nhức âm ỉ liên tục",
+            fullText: "Tôi bị đau nhức âm ỉ kéo dài liên tục cả ngày",
+            clinicalCategory: "CHRONIC_MILD",
+          },
+          {
+            id: "gen_c2",
+            display: "Đau nhói từng cơn đột ngột",
+            fullText: "Thỉnh thoảng đau nhói buốt dữ dội từng cơn rồi giảm dần",
+            clinicalCategory: "ACUTE_PAROXYSMAL",
+          },
+          {
+            id: "gen_c3",
+            display: "Đau tăng khi vận động",
+            fullText: "Cơn đau tăng rõ rệt khi tôi cử động hoặc làm việc nặng",
+            clinicalCategory: "MECHANICAL",
+          },
+          {
+            id: "gen_c4",
+            display: "Khó chịu nhẹ, chưa rõ vị trí",
+            fullText: "Tôi chỉ cảm thấy bứt rứt khó chịu nhẹ trong người",
+            clinicalCategory: "UNSPECIFIED",
+          },
+        ];
+      }
     }
   } else if (slots.duration.status !== "COMPLETED" || slots.associatedSigns.status !== "COMPLETED") {
     questionBody = "Tình trạng này đã kéo dài bao lâu rồi, và bạn có kèm theo triệu chứng nào khác không?";
