@@ -11,7 +11,6 @@ import {
   AlertTriangle,
   Flame,
   ArrowRight,
-  Sparkles,
 } from "lucide-react";
 
 interface LivingContextSidebarProps {
@@ -208,33 +207,6 @@ export function LivingContextSidebar({
               Đang Phân Tích
             </span>
           )}
-        </div>
-      </div>
-
-      {/* Real-time 1024D Vector Search Widget */}
-      <div className="mt-3 rounded-xl border border-primary-200 bg-primary-50/40 p-2.5 space-y-1.5 shadow-2xs">
-        <div className="flex items-center justify-between text-[10px] font-bold text-primary-900">
-          <div className="flex items-center gap-1">
-            <Sparkles size={12} className="text-primary-700" />
-            <span>Vector Search RAG</span>
-          </div>
-          <span className="font-mono text-emerald-800 bg-emerald-100/90 px-1.5 py-0.5 rounded text-[9px] font-bold">
-            {context.vectorSearchMeta?.matchPercentage || 95.8}% Match
-          </span>
-        </div>
-        <div className="text-[9px] text-ink-600 space-y-0.5 font-mono">
-          <div className="flex justify-between">
-            <span>Embedding:</span>
-            <span className="text-ink-900 font-semibold">{context.vectorSearchMeta?.model || "mistral-embed-1024d"}</span>
-          </div>
-          <div className="flex justify-between">
-            <span>Vector Index:</span>
-            <span className="text-ink-900 font-semibold">{context.vectorSearchMeta?.totalIndexedVectors || 2670} Vectors BYT</span>
-          </div>
-          <div className="flex justify-between">
-            <span>Cosine Latency:</span>
-            <span className="text-ink-900 font-semibold">{context.vectorSearchMeta?.searchLatencyMs || 12}ms</span>
-          </div>
         </div>
       </div>
 

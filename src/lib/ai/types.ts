@@ -59,24 +59,8 @@ export interface LivingClinicalContext {
   assignedDoctorName?: string;
   assignedRoom?: string;
   activeCitations: CitationItem[];
-  vectorSearchMeta?: VectorSearchMetadata;
   soothingPayload?: PsychologicalSoothingPayload | null;
   appointmentOffers: AppointmentOffer[];
-}
-
-export interface VectorSearchMetadata {
-  model: string;
-  vectorDimension: number;
-  totalIndexedVectors: number;
-  searchLatencyMs: number;
-  cosineSimilarity: number;
-  matchPercentage: number;
-  topMatches: Array<{
-    title: string;
-    sectionTitle: string;
-    cosineSimilarity: number;
-    matchPercentage: number;
-  }>;
 }
 
 export interface PsychologicalSoothingPayload {
@@ -95,5 +79,4 @@ export interface SlotEvaluationResult {
   suggestedChips: ContextualChipOption[];
   matchedSpecialtyCode?: string;
   matchedSpecialtyName?: string;
-  vectorSearchMeta?: VectorSearchMetadata;
 }

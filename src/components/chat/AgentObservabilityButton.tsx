@@ -29,7 +29,6 @@ export function AgentObservabilityButton({
 - **Mức độ Triage:** ${context.urgencyLevel}
 - **Chuyên khoa đề xuất:** ${context.detectedSpecialtyName || "Chưa xác định"} (${context.detectedSpecialtyCode || "N/A"})
 - **Bác sĩ phụ trách:** ${context.assignedDoctorName || "N/A"} - ${context.assignedRoom || "N/A"}
-- **Vector Search RAG:** ${context.vectorSearchMeta?.matchPercentage || 95.8}% Cosine Match (${context.vectorSearchMeta?.model || "mistral-embed-1024d"} • ${context.vectorSearchMeta?.totalIndexedVectors || 2670} Vectors • ${context.vectorSearchMeta?.searchLatencyMs || 12}ms)
 
 #### 🔍 TRẠNG THÁI 4 TRƯỜNG LÂM SÀNG (SLOT MATRIX):
 1. **Vị trí & Triệu chứng chính:** [${context.slots.chiefComplaint.status}] "${context.slots.chiefComplaint.value || ""}" (Clarity: ${context.slots.chiefComplaint.clarityScore})
