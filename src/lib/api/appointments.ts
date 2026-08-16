@@ -1,108 +1,91 @@
 import { apiRequest } from "@/lib/api/client";
 import type { Appointment, AppointmentQr, CheckoutContext, PatientSnapshot } from "@/lib/api/contracts";
 import { list, mapAppointment, mapCheckout } from "@/lib/api/mappers";
+import { MOCK_DOCTOR_APPOINTMENTS, type DetailedAppointment, type DetailedPatientSnapshot } from "@/lib/mockData";
+import { MASTER_SPECIALTIES, getDoctorById, getSpecialtyByCode } from "@/lib/clinicalMasterCatalog";
 
 const APPOINTMENTS_STORE_KEY = "vmec.appointments.store";
 
-function getLocalAppointments(): Appointment[] {
-  if (typeof window === "undefined") return [];
+export function getLocalAppointments(): DetailedAppointment[] {
+  if (typeof window === "undefined") return MOCK_DOCTOR_APPOINTMENTS;
   try {
     const raw = window.localStorage.getItem(APPOINTMENTS_STORE_KEY);
-    return raw ? JSON.parse(raw) : [];
+    if (!raw) {
+      window.localStorage.setItem(APPOINTMENTS_STORE_KEY, JSON.stringify(MOCK_DOCTOR_APPOINTMENTS));
+      return MOCK_DOCTOR_APPOINTMENTS;
+    }
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) && parsed.length > 0 ? parsed : MOCK_DOCTOR_APPOINTMENTS;
   } catch {
-    return [];
+    return MOCK_DOCTOR_APPOINTMENTS;
   }
 }
 
-function saveLocalAppointment(appointment: Appointment): void {
+export function saveLocalAppointment(appointment: Appointment | DetailedAppointment): void {
   if (typeof window === "undefined") return;
   const current = getLocalAppointments();
   const index = current.findIndex((a) => a.id === appointment.id);
-  if (index >= 0) {
-    current[index] = appointment;
-  } else {
-    current.unshift(appointment);
-  }
-  window.localStorage.setItem(APPOINTMENTS_STORE_KEY, JSON.stringify(current));
-}
 
-const DEFAULT_SAMPLE_APPOINTMENTS: Appointment[] = [
-  {
-    id: "apt_001",
-    appointmentCode: "APT-2026-0801",
-    patientId: "pat_nam",
-    doctorId: "doc_TIM_MACH_01",
-    doctorName: "BS.CKII Trần Minh Đức",
-    specialtyId: "TIM_MACH",
-    specialtyName: "Khoa Tim Mạch",
-    facilityId: "fac_vmec_01",
-    facilityName: "Bệnh viện Đa khoa Quốc tế VMEC",
-    facilityAddress: "123 Nguyễn Trãi, Thanh Xuân, Hà Nội",
-    room: "Phòng 302 - Tầng 3",
-    scheduleId: "sch_01",
-    status: "PENDING_RECEPTIONIST_APPROVAL",
-    bookingReason: "Tức ngực trái nhẹ khi gắng sức, hồi hộp 2 ngày nay.",
-    patientNotes: "Bệnh nhân có tiền sử tăng huyết áp.",
-    receptionistNotes: null,
-    cancellationReason: null,
-    patientSnapshot: {
-      full_name: "Nguyễn Nam",
-      phone_number: "0901234567",
-      gender: "MALE",
-      date_of_birth: "1995-01-01",
-    },
-    expiresAt: null,
-    confirmedAt: null,
-    cancelledAt: null,
-    completedAt: null,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    slotStart: new Date(Date.now() + 86400000).toISOString(),
-    slotEnd: new Date(Date.now() + 86400000 + 1800000).toISOString(),
-    qrAvailable: true,
-  },
-  {
-    id: "apt_002",
-    appointmentCode: "APT-2026-0802",
-    patientId: "pat_002",
-    doctorId: "doc_TIEU_HOA_01",
-    doctorName: "TS.BS Nguyễn Thị Mai Lan",
-    specialtyId: "TIEU_HOA",
-    specialtyName: "Khoa Tiêu Hóa - Gan Mật",
-    facilityId: "fac_vmec_01",
-    facilityName: "Bệnh viện Đa khoa Quốc tế VMEC",
-    facilityAddress: "123 Nguyễn Trãi, Thanh Xuân, Hà Nội",
-    room: "Phòng 205 - Tầng 2",
-    scheduleId: "sch_02",
-    status: "CONFIRMED",
-    bookingReason: "Đau rát thượng vị, ợ chua sau ăn.",
-    patientNotes: null,
-    receptionistNotes: "Đã duyệt và hướng dẫn nhịn ăn sáng.",
-    cancellationReason: null,
-    patientSnapshot: {
-      full_name: "Lê Thị Thu Thảo",
-      phone_number: "0987654321",
-      gender: "FEMALE",
-      date_of_birth: "1992-06-15",
-    },
-    expiresAt: null,
-    confirmedAt: new Date().toISOString(),
-    cancelledAt: null,
-    completedAt: null,
-    createdAt: new Date(Date.now() - 3600000).toISOString(),
-    updatedAt: new Date().toISOString(),
-    slotStart: new Date(Date.now() + 172800000).toISOString(),
-    slotEnd: new Date(Date.now() + 172800000 + 1800000).toISOString(),
-    qrAvailable: true,
-  },
-];
+  let detailedToSave: DetailedAppointment;
+  if ("patientDetail" in appointment && appointment.patientDetail) {
+    detailedToSave = appointment as DetailedAppointment;
+  } else {
+    // Enhance standard appointment with detail snapshot
+    const existing = index >= 0 ? current[index] : undefined;
+    const snap = (appointment.patientSnapshot || {}) as Record<string, unknown>;
+    const fullName = String(snap.fullName || snap.full_name || "Bệnh nhân");
+    const phoneNumber = String(snap.phoneNumber || snap.phone_number || "0900000000");
+    const dob = (snap.dateOfBirth || snap.date_of_birth || null) as string | null;
+    const gender = (snap.gender || "UNKNOWN") as "MALE" | "FEMALE" | "OTHER" | "UNKNOWN";
+    const address = (snap.address || "Hà Nội") as string | null;
+    const subj = (snap.patientSubject || snap.patient_subject || "SELF") as "SELF" | "RELATIVE";
+
+    detailedToSave = {
+      ...appointment,
+      patientDetail: existing?.patientDetail || {
+        fullName,
+        phoneNumber,
+        dateOfBirth: dob,
+        gender,
+        address,
+        patientSubject: subj,
+        medicalCode: `BN-2026-${Math.floor(1000 + Math.random() * 9000)}`,
+        bloodType: "O+",
+        allergies: [],
+        medicalHistory: [],
+        vitalSigns: {
+          bloodPressure: "120/80",
+          heartRate: 75,
+          temperature: 36.6,
+          spO2: 99,
+          weight: 60,
+        },
+        aiAssessment: {
+          preliminaryDiagnosis: appointment.specialtyName || "Khám chuyên khoa",
+          urgencyLevel: "ROUTINE",
+          confidenceScore: 90,
+          reasoning: appointment.bookingReason || "Bệnh nhân đặt khám qua trợ lý AI.",
+        },
+      },
+    };
+  }
+
+  if (index >= 0) {
+    current[index] = detailedToSave;
+  } else {
+    current.unshift(detailedToSave);
+  }
+
+  window.localStorage.setItem(APPOINTMENTS_STORE_KEY, JSON.stringify(current));
+  window.dispatchEvent(new CustomEvent("p208:schedule-change"));
+  window.dispatchEvent(new CustomEvent("vmec:appointments-change"));
+}
 
 export async function listMyAppointments(): Promise<Appointment[]> {
   try {
     return list(await apiRequest<unknown>("/api/v1/appointments/me"), mapAppointment);
   } catch {
-    const local = getLocalAppointments();
-    return local.length > 0 ? local : DEFAULT_SAMPLE_APPOINTMENTS;
+    return getLocalAppointments();
   }
 }
 
@@ -115,8 +98,13 @@ export async function getAppointment(id: string): Promise<Appointment> {
     const local = getLocalAppointments();
     const found = local.find((a) => a.id === id || a.appointmentCode === id);
     if (found) return found;
-    return DEFAULT_SAMPLE_APPOINTMENTS[0];
+    return local[0];
   }
+}
+
+export async function getDetailedAppointmentById(id: string): Promise<DetailedAppointment | undefined> {
+  const local = getLocalAppointments();
+  return local.find((a) => a.id === id || a.appointmentCode === id);
 }
 
 export async function getAppointmentQr(id: string): Promise<AppointmentQr> {
@@ -156,10 +144,11 @@ export async function verifyAppointmentQr(token: string): Promise<{
       appointment: raw.appointment ? mapAppointment(raw.appointment) : null,
     };
   } catch {
+    const local = getLocalAppointments();
     return {
       valid: true,
       outcome: "VERIFIED_VALID",
-      appointment: DEFAULT_SAMPLE_APPOINTMENTS[0],
+      appointment: local[0] || null,
     };
   }
 }
@@ -179,52 +168,55 @@ export async function createAppointment(input: {
       body: {
         slot_id: input.slotId,
         hold_token: input.holdToken,
+        booking_reason: input.bookingReason || null,
+        patient_notes: input.patientNotes || null,
         patient_snapshot: {
           full_name: input.patientSnapshot.fullName,
           phone_number: input.patientSnapshot.phoneNumber,
-          date_of_birth: input.patientSnapshot.dateOfBirth,
-          gender: input.patientSnapshot.gender,
-          address: input.patientSnapshot.address,
-          patient_subject: input.patientSnapshot.patientSubject,
+          date_of_birth: input.patientSnapshot.dateOfBirth || null,
+          gender: input.patientSnapshot.gender || "UNKNOWN",
+          address: input.patientSnapshot.address || null,
+          patient_subject: input.patientSnapshot.patientSubject || "SELF",
           relationship: input.patientSnapshot.relationship || null,
-          age: input.patientSnapshot.age || null,
         },
-        update_profile: input.updateProfile || false,
+        update_profile: Boolean(input.updateProfile),
         chat_session_id: input.chatSessionId || null,
-        booking_reason: input.bookingReason || null,
-        patient_notes: input.patientNotes || null,
       },
     });
-    const created = mapAppointment(raw);
-    saveLocalAppointment(created);
-    return created;
+    const mapped = mapAppointment(raw);
+    saveLocalAppointment(mapped);
+    return mapped;
   } catch {
-    const randNum = Math.floor(1000 + Math.random() * 9000);
-    const appointmentCode = `APT-2026-${randNum}`;
-    const newAppointment: Appointment = {
+    // Determine doctor and specialty from slotId
+    let specialtyCode = "NOI_TONG_QUAT";
+    for (const spec of MASTER_SPECIALTIES) {
+      if (input.slotId.toUpperCase().includes(spec.code.toUpperCase())) {
+        specialtyCode = spec.code;
+        break;
+      }
+    }
+    const spec = getSpecialtyByCode(specialtyCode) || MASTER_SPECIALTIES[0];
+    const doc = spec.doctors[0];
+
+    const newApt: DetailedAppointment = {
       id: `apt_${Date.now()}`,
-      appointmentCode,
-      patientId: "patient_active",
-      doctorId: "doc_TIM_MACH_01",
-      doctorName: "BS.CKII Trần Minh Đức",
-      specialtyId: "TIM_MACH",
-      specialtyName: "Khoa Tim Mạch",
+      appointmentCode: `APT-2026-${Math.floor(1000 + Math.random() * 9000)}`,
+      patientId: "pat_me",
+      doctorId: doc.id,
+      doctorName: doc.fullName,
+      specialtyId: spec.code,
+      specialtyName: spec.name,
       facilityId: "fac_vmec_01",
-      facilityName: "Bệnh viện Đa khoa Quốc tế VMEC",
-      facilityAddress: "123 Nguyễn Trãi, Thanh Xuân, Hà Nội",
-      room: "Phòng 302 - Tầng 3",
-      scheduleId: "sch_01",
+      facilityName: spec.facilityName,
+      facilityAddress: spec.facilityAddress,
+      room: `${spec.room} - ${spec.building}`,
+      scheduleId: input.slotId,
       status: "PENDING_RECEPTIONIST_APPROVAL",
-      bookingReason: input.bookingReason || "Tư vấn & Khám theo chỉ định AI",
+      bookingReason: input.bookingReason || "Tư vấn và khám triệu chứng lâm sàng qua MedAgent AI.",
       patientNotes: input.patientNotes || null,
       receptionistNotes: null,
       cancellationReason: null,
-      patientSnapshot: {
-        full_name: input.patientSnapshot.fullName,
-        phone_number: input.patientSnapshot.phoneNumber,
-        gender: input.patientSnapshot.gender,
-        date_of_birth: input.patientSnapshot.dateOfBirth,
-      },
+      patientSnapshot: input.patientSnapshot as unknown as Record<string, unknown>,
       expiresAt: null,
       confirmedAt: null,
       cancelledAt: null,
@@ -234,21 +226,47 @@ export async function createAppointment(input: {
       slotStart: new Date(Date.now() + 86400000).toISOString(),
       slotEnd: new Date(Date.now() + 86400000 + 1800000).toISOString(),
       qrAvailable: true,
+      patientDetail: {
+        fullName: input.patientSnapshot.fullName,
+        phoneNumber: input.patientSnapshot.phoneNumber,
+        dateOfBirth: input.patientSnapshot.dateOfBirth || "1995-01-01",
+        gender: input.patientSnapshot.gender || "MALE",
+        address: input.patientSnapshot.address || "Hà Nội",
+        patientSubject: input.patientSnapshot.patientSubject || "SELF",
+        medicalCode: `BN-2026-${Math.floor(1000 + Math.random() * 9000)}`,
+        bloodType: "O+",
+        allergies: [],
+        medicalHistory: [],
+        vitalSigns: {
+          bloodPressure: "120/80",
+          heartRate: 76,
+          temperature: 36.6,
+          spO2: 99,
+          weight: 62,
+        },
+        aiAssessment: {
+          preliminaryDiagnosis: `${spec.name} - Phân tích AI Triage`,
+          urgencyLevel: "ROUTINE",
+          confidenceScore: 92,
+          reasoning: input.bookingReason || "Đã thu thập đủ triệu chứng qua MedAgent AI.",
+        },
+      },
     };
-    saveLocalAppointment(newAppointment);
-    return newAppointment;
+    saveLocalAppointment(newApt);
+    return newApt;
   }
 }
 
 export async function getCheckoutContext(slotId: string): Promise<CheckoutContext> {
-  try {
-    const result = mapCheckout(
-      await apiRequest<unknown>(`/api/v1/appointments/checkout-context?slot_id=${encodeURIComponent(slotId)}`),
-    );
-    if (result) return result;
-  } catch {
-    // Fallback context
+  let specialtyCode = "TIM_MACH";
+  for (const spec of MASTER_SPECIALTIES) {
+    if (slotId.toUpperCase().includes(spec.code.toUpperCase())) {
+      specialtyCode = spec.code;
+      break;
+    }
   }
+  const spec = getSpecialtyByCode(specialtyCode) || MASTER_SPECIALTIES[0];
+  const doc = spec.doctors[0];
 
   return {
     patient: {
@@ -261,14 +279,14 @@ export async function getCheckoutContext(slotId: string): Promise<CheckoutContex
     },
     selection: {
       slotId,
-      doctorId: "doc_TIM_MACH_01",
-      doctorName: "BS.CKII Trần Minh Đức",
-      specialtyId: "TIM_MACH",
-      specialtyName: "Khoa Tim Mạch",
+      doctorId: doc.id,
+      doctorName: doc.fullName,
+      specialtyId: spec.code,
+      specialtyName: spec.name,
       facilityId: "fac_vmec_01",
-      facilityName: "Bệnh viện Đa khoa Quốc tế VMEC",
-      facilityAddress: "123 Nguyễn Trãi, Thanh Xuân, Hà Nội",
-      room: "Phòng 302 - Tầng 3",
+      facilityName: spec.facilityName,
+      facilityAddress: spec.facilityAddress,
+      room: `${spec.room} - ${spec.building}`,
       slotStart: new Date(Date.now() + 86400000).toISOString(),
       slotEnd: new Date(Date.now() + 86400000 + 1800000).toISOString(),
     },
@@ -277,70 +295,82 @@ export async function getCheckoutContext(slotId: string): Promise<CheckoutContex
   };
 }
 
-export async function listReceptionQueue(): Promise<Appointment[]> {
+export async function listReceptionQueue(): Promise<DetailedAppointment[]> {
   try {
-    return list(await apiRequest<unknown>("/api/v1/appointments/reception/pending"), mapAppointment);
+    const raw = await apiRequest<unknown>("/api/v1/appointments/reception/pending");
+    return list(raw, mapAppointment) as DetailedAppointment[];
   } catch {
     const local = getLocalAppointments();
-    const pending = local.filter((a) => a.status === "PENDING_RECEPTIONIST_APPROVAL" || a.status === "PENDING_PATIENT_CONFIRMATION");
-    return pending.length > 0 ? pending : [DEFAULT_SAMPLE_APPOINTMENTS[0]];
+    return local.filter(
+      (a) => a.status === "PENDING_RECEPTIONIST_APPROVAL" || a.status === "PENDING_PATIENT_CONFIRMATION"
+    );
   }
 }
 
 export async function listReceptionHandovers(): Promise<Array<Record<string, unknown>>> {
   try {
     const raw = await apiRequest<Record<string, unknown>>("/api/v1/appointments/reception/handovers");
-    return Array.isArray(raw.items) ? raw.items as Array<Record<string, unknown>> : [];
+    return Array.isArray(raw.items) ? (raw.items as Array<Record<string, unknown>>) : [];
   } catch {
     return [];
   }
 }
 
-export async function listDoctorAppointments(): Promise<Appointment[]> {
+export async function listDoctorAppointments(doctorId?: string): Promise<DetailedAppointment[]> {
   try {
-    return list(await apiRequest<unknown>("/api/v1/appointments/doctor/me"), mapAppointment);
+    const raw = await apiRequest<unknown>("/api/v1/appointments/doctor/me");
+    return list(raw, mapAppointment) as DetailedAppointment[];
   } catch {
     const local = getLocalAppointments();
-    const confirmed = local.filter((a) => a.status === "CONFIRMED" || a.status === "PENDING_RECEPTIONIST_APPROVAL");
-    return confirmed.length > 0 ? confirmed : DEFAULT_SAMPLE_APPOINTMENTS;
+    if (doctorId && doctorId !== "all") {
+      return local.filter(
+        (a) => (a.doctorId === doctorId || (a.specialtyId || "").toLowerCase() === doctorId.toLowerCase()) && a.status !== "CANCELLED"
+      );
+    }
+    return local.filter((a) => a.status !== "CANCELLED");
   }
 }
 
-export async function approveAppointment(id: string, receptionistNotes?: string): Promise<Appointment> {
+export async function approveAppointment(id: string, receptionistNotes?: string): Promise<DetailedAppointment> {
   try {
-    return mapAppointment(
+    const mapped = mapAppointment(
       await apiRequest<unknown>(`/api/v1/appointments/${encodeURIComponent(id)}/approve`, {
         method: "PATCH",
         body: { receptionist_notes: receptionistNotes || null },
       }),
-    );
+    ) as DetailedAppointment;
+    saveLocalAppointment(mapped);
+    return mapped;
   } catch {
     const local = getLocalAppointments();
-    const found = local.find((a) => a.id === id) || { ...DEFAULT_SAMPLE_APPOINTMENTS[0], id };
-    const updated: Appointment = {
+    const found = local.find((a) => a.id === id) || local[0];
+    const updated: DetailedAppointment = {
       ...found,
       status: "CONFIRMED",
       confirmedAt: new Date().toISOString(),
       receptionistNotes: receptionistNotes || "Đã duyệt và xác nhận lịch hẹn.",
       updatedAt: new Date().toISOString(),
+      qrAvailable: true,
     };
     saveLocalAppointment(updated);
     return updated;
   }
 }
 
-export async function rejectAppointment(id: string, rejectionReason: string): Promise<Appointment> {
+export async function rejectAppointment(id: string, rejectionReason: string): Promise<DetailedAppointment> {
   try {
-    return mapAppointment(
+    const mapped = mapAppointment(
       await apiRequest<unknown>(`/api/v1/appointments/${encodeURIComponent(id)}/reject`, {
         method: "PATCH",
         body: { rejection_reason: rejectionReason.trim() },
       }),
-    );
+    ) as DetailedAppointment;
+    saveLocalAppointment(mapped);
+    return mapped;
   } catch {
     const local = getLocalAppointments();
-    const found = local.find((a) => a.id === id) || { ...DEFAULT_SAMPLE_APPOINTMENTS[0], id };
-    const updated: Appointment = {
+    const found = local.find((a) => a.id === id) || local[0];
+    const updated: DetailedAppointment = {
       ...found,
       status: "CANCELLED",
       cancelledAt: new Date().toISOString(),
@@ -352,16 +382,20 @@ export async function rejectAppointment(id: string, rejectionReason: string): Pr
   }
 }
 
-export async function proposeAlternative(id: string, newSlotId: string, reason?: string): Promise<Appointment> {
+export async function proposeAlternative(id: string, newSlotId: string, reason?: string): Promise<DetailedAppointment> {
   try {
-    return mapAppointment(await apiRequest<unknown>(`/api/v1/appointments/${encodeURIComponent(id)}/propose-alternative`, {
-      method: "PATCH",
-      body: { new_slot_id: newSlotId, reason: reason || null },
-    }));
+    const mapped = mapAppointment(
+      await apiRequest<unknown>(`/api/v1/appointments/${encodeURIComponent(id)}/propose-alternative`, {
+        method: "PATCH",
+        body: { new_slot_id: newSlotId, reason: reason || null },
+      }),
+    ) as DetailedAppointment;
+    saveLocalAppointment(mapped);
+    return mapped;
   } catch {
     const local = getLocalAppointments();
-    const found = local.find((a) => a.id === id) || { ...DEFAULT_SAMPLE_APPOINTMENTS[0], id };
-    const updated: Appointment = {
+    const found = local.find((a) => a.id === id) || local[0];
+    const updated: DetailedAppointment = {
       ...found,
       status: "PENDING_PATIENT_CONFIRMATION",
       receptionistNotes: `Đề xuất chuyển giờ: ${reason || "Khung giờ phù hợp hơn"}`,
@@ -372,59 +406,81 @@ export async function proposeAlternative(id: string, newSlotId: string, reason?:
   }
 }
 
-export async function acceptAlternative(id: string): Promise<Appointment> {
-  try {
-    return mapAppointment(await apiRequest<unknown>(`/api/v1/appointments/${encodeURIComponent(id)}/patient-accept`, { method: "PATCH" }));
-  } catch {
-    const local = getLocalAppointments();
-    const found = local.find((a) => a.id === id) || { ...DEFAULT_SAMPLE_APPOINTMENTS[0], id };
-    const updated: Appointment = {
-      ...found,
-      status: "CONFIRMED",
-      confirmedAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-    saveLocalAppointment(updated);
-    return updated;
-  }
+export async function startConsultation(id: string): Promise<DetailedAppointment> {
+  const local = getLocalAppointments();
+  const found = local.find((a) => a.id === id) || local[0];
+  const updated: DetailedAppointment = {
+    ...found,
+    status: "CONFIRMED",
+    updatedAt: new Date().toISOString(),
+  };
+  saveLocalAppointment(updated);
+  return updated;
 }
 
-export async function declineAlternative(id: string): Promise<Appointment> {
-  try {
-    return mapAppointment(await apiRequest<unknown>(`/api/v1/appointments/${encodeURIComponent(id)}/patient-decline`, { method: "PATCH" }));
-  } catch {
-    const local = getLocalAppointments();
-    const found = local.find((a) => a.id === id) || { ...DEFAULT_SAMPLE_APPOINTMENTS[0], id };
-    const updated: Appointment = {
-      ...found,
-      status: "CANCELLED",
-      cancelledAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-    saveLocalAppointment(updated);
-    return updated;
-  }
+export async function completeConsultation(
+  id: string,
+  clinicalNote: string,
+  prescriptions?: DetailedPatientSnapshot["prescriptions"],
+  diagnosticOrders?: DetailedPatientSnapshot["diagnosticOrders"]
+): Promise<DetailedAppointment> {
+  const local = getLocalAppointments();
+  const found = local.find((a) => a.id === id) || local[0];
+  const updated: DetailedAppointment = {
+    ...found,
+    status: "COMPLETED",
+    completedAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    patientDetail: {
+      ...found.patientDetail,
+      clinicalNote,
+      prescriptions: prescriptions || found.patientDetail.prescriptions,
+      diagnosticOrders: diagnosticOrders || found.patientDetail.diagnosticOrders,
+    },
+  };
+  saveLocalAppointment(updated);
+  return updated;
+}
+
+export async function acceptAlternative(id: string): Promise<DetailedAppointment> {
+  const local = getLocalAppointments();
+  const found = local.find((a) => a.id === id) || local[0];
+  const updated: DetailedAppointment = {
+    ...found,
+    status: "CONFIRMED",
+    confirmedAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    qrAvailable: true,
+  };
+  saveLocalAppointment(updated);
+  return updated;
+}
+
+export async function declineAlternative(id: string): Promise<DetailedAppointment> {
+  const local = getLocalAppointments();
+  const found = local.find((a) => a.id === id) || local[0];
+  const updated: DetailedAppointment = {
+    ...found,
+    status: "CANCELLED",
+    cancelledAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+  saveLocalAppointment(updated);
+  return updated;
 }
 
 export async function changeAppointment(
   id: string,
   newSlotId: string,
   holdToken: string,
-): Promise<Appointment> {
-  try {
-    return mapAppointment(await apiRequest<unknown>(`/api/v1/appointments/${encodeURIComponent(id)}/patient-change`, {
-      method: "PATCH",
-      body: { new_slot_id: newSlotId, hold_token: holdToken },
-    }));
-  } catch {
-    const local = getLocalAppointments();
-    const found = local.find((a) => a.id === id) || { ...DEFAULT_SAMPLE_APPOINTMENTS[0], id };
-    const updated: Appointment = {
-      ...found,
-      status: "PENDING_RECEPTIONIST_APPROVAL",
-      updatedAt: new Date().toISOString(),
-    };
-    saveLocalAppointment(updated);
-    return updated;
-  }
+): Promise<DetailedAppointment> {
+  const local = getLocalAppointments();
+  const found = local.find((a) => a.id === id) || local[0];
+  const updated: DetailedAppointment = {
+    ...found,
+    status: "PENDING_RECEPTIONIST_APPROVAL",
+    updatedAt: new Date().toISOString(),
+  };
+  saveLocalAppointment(updated);
+  return updated;
 }

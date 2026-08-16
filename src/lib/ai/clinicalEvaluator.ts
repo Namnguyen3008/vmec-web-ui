@@ -88,6 +88,10 @@ function isPureGreeting(text: string): boolean {
  * Multi-Factor Clinical Specialty Router with Chief Complaint Anchoring
  * Prevents secondary symptoms (like "hụt hơi") from overwriting primary chief complaint ("đau đầu").
  */
+/**
+ * Multi-Factor Clinical Specialty Router with Chief Complaint Anchoring
+ * Covers all 17 primary specialties and subspecialties in VMEC Master Catalog.
+ */
 export function routeSpecialtyWithFactWeights(
   chiefComplaint: string,
   associatedSigns: string,
@@ -96,54 +100,89 @@ export function routeSpecialtyWithFactWeights(
   const chief = chiefComplaint.toLowerCase();
   const assoc = associatedSigns.toLowerCase();
   const char = characterText.toLowerCase();
+  const combined = `${chief} ${assoc} ${char}`;
 
-  // 1. CHIEF COMPLAINT: NEUROLOGY / THẦN KINH (Đau đầu, chóng mặt, tiền đình)
-  if (chief.includes("đầu") || chief.includes("nhức đầu") || chief.includes("chóng mặt") || chief.includes("tiền đình")) {
-    const spec = CLINICAL_SPECIALTIES.find((s) => s.code === "THAN_KINH") || {
-      code: "THAN_KINH",
-      name: "Khoa Thần Kinh & Cột Sống",
-      doctor: "BS.CKII Lê Hoàng Nam",
-      doctorAvatar: "https://images.unsplash.com/photo-1537368910025-700350fe46c7?w=120&auto=format&fit=crop&q=80",
-      room: "Phòng 405 - Tầng 4, Tòa nhà A",
-      facilityName: "Bệnh viện Đa khoa Quốc tế VMEC",
-      facilityAddress: "123 Nguyễn Trãi, Thanh Xuân, Hà Nội",
-      keywords: ["đầu", "đau đầu", "nhức đầu", "chóng mặt", "mất ngủ", "tê bì"],
-      reasoning: "Triệu chứng đau đầu nhói buốt dữ dội từng cơn cần được khám chuyên khoa Thần kinh để loại trừ tổn thương thực thể và đánh giá mạch máu não.",
-      citations: [
-        {
-          sourceId: "BYT_NEURO_2026",
-          documentId: "QĐ-1248/QĐ-BYT",
-          label: "Hướng dẫn chẩn đoán và điều trị Đau đầu Migraine & Đau đầu căng thẳng (Bộ Y Tế)",
-          url: "https://kcb.vn",
-          sectionTitle: "Mục 3: Tiêu chuẩn phân tầng nguy cơ đau đầu cấp tính & Cảnh báo Red-Flags",
-          confidence: 97,
-          snippet: "Bệnh nhân có triệu chứng đau đầu nhói buốt dữ dội từng cơn kèm mệt mỏi cần được thăm khám thần kinh và tầm soát hình ảnh học sọ não.",
-        },
-      ],
-    };
-    return spec;
+  // 1. PEDIATRIC / NHI KHOA (Trẻ em, con, bé, cháu)
+  if (chief.includes("cháu") || chief.includes("bé") || chief.includes("con") || chief.includes("trẻ")) {
+    return CLINICAL_SPECIALTIES.find((s) => s.code === "NHI_KHOA") || CLINICAL_SPECIALTIES[0];
   }
 
-  // 2. CHIEF COMPLAINT: CARDIAC / TIM MẠCH (Ngực, tim, hồi hộp)
-  if (chief.includes("ngực") || chief.includes("tim") || chief.includes("tức ngực") || chief.includes("hồi hộp")) {
+  // 2. OB/GYN / SẢN PHỤ KHOA (Thai, có bầu, phụ khoa, kinh nguyệt)
+  if (chief.includes("thai") || chief.includes("bầu") || chief.includes("phụ khoa") || chief.includes("kinh nguyệt") || chief.includes("chậm kinh")) {
+    return CLINICAL_SPECIALTIES.find((s) => s.code === "SAN_PHU_KHOA") || CLINICAL_SPECIALTIES[0];
+  }
+
+  // 3. OPHTHALMOLOGY / MẮT
+  if (chief.includes("mắt") || chief.includes("nhìn mờ") || chief.includes("thị lực") || chief.includes("đỏ mắt") || chief.includes("cận thị")) {
+    return CLINICAL_SPECIALTIES.find((s) => s.code === "MAT") || CLINICAL_SPECIALTIES[0];
+  }
+
+  // 4. DENTAL / RĂNG HÀM MẶT
+  if (chief.includes("răng") || chief.includes("hàm") || chief.includes("lợi") || chief.includes("nướu") || chief.includes("buốt răng") || chief.includes("tủy răng")) {
+    return CLINICAL_SPECIALTIES.find((s) => s.code === "RANG_HAM_MAT") || CLINICAL_SPECIALTIES[0];
+  }
+
+  // 5. ENT / TAI MŨI HỌNG
+  if (chief.includes("tai") || chief.includes("mũi") || chief.includes("xoang") || chief.includes("ù tai") || chief.includes("ngạt mũi") || chief.includes("khàn tiếng") || (chief.includes("họng") && !chief.includes("đầu"))) {
+    return CLINICAL_SPECIALTIES.find((s) => s.code === "TAI_MUI_HONG") || CLINICAL_SPECIALTIES[0];
+  }
+
+  // 6. DERMATOLOGY / DA LIỄU
+  if (chief.includes("da") || chief.includes("ngứa") || chief.includes("mẩn") || chief.includes("mề đay") || chief.includes("mụn") || chief.includes("chàm") || chief.includes("vảy nến")) {
+    return CLINICAL_SPECIALTIES.find((s) => s.code === "DA_LIEU") || CLINICAL_SPECIALTIES[0];
+  }
+
+  // 7. MUSCULOSKELETAL / CƠ XƯƠNG KHỚP
+  if (chief.includes("khớp") || chief.includes("xương") || chief.includes("lưng") || chief.includes("cột sống") || chief.includes("đầu gối") || chief.includes("vai gáy") || chief.includes("gout") || chief.includes("thoái hóa")) {
+    return CLINICAL_SPECIALTIES.find((s) => s.code === "CO_XUONG_KHOP") || CLINICAL_SPECIALTIES[0];
+  }
+
+  // 8. UROLOGY / THẬN - TIẾT NIỆU
+  if (chief.includes("thận") || chief.includes("tiểu buốt") || chief.includes("tiểu rắt") || chief.includes("tiểu ra máu") || chief.includes("sỏi thận") || chief.includes("tiết niệu") || chief.includes("nam học")) {
+    return CLINICAL_SPECIALTIES.find((s) => s.code === "THAN_TIET_NIEU") || CLINICAL_SPECIALTIES[0];
+  }
+
+  // 9. ENDOCRINOLOGY / NỘI TIẾT
+  if (chief.includes("đường huyết") || chief.includes("tiểu đường") || chief.includes("đái tháo đường") || chief.includes("tuyến giáp") || chief.includes("bướu cổ") || chief.includes("basedow") || chief.includes("suy giáp")) {
+    return CLINICAL_SPECIALTIES.find((s) => s.code === "NOI_TIET") || CLINICAL_SPECIALTIES[0];
+  }
+
+  // 10. PSYCHIATRY / TÂM LÝ - TÂM THẦN
+  if (chief.includes("lo âu") || chief.includes("trầm cảm") || chief.includes("stress") || chief.includes("hoảng loạn") || (chief.includes("mất ngủ") && !chief.includes("đầu"))) {
+    return CLINICAL_SPECIALTIES.find((s) => s.code === "TAM_THAN_TAM_LY") || CLINICAL_SPECIALTIES[0];
+  }
+
+  // 11. INFECTIOUS / TRUYỀN NHIỄM
+  if (chief.includes("sốt xuất huyết") || chief.includes("phát ban") || (chief.includes("sốt cao") && !chief.includes("cháu") && !chief.includes("bé"))) {
+    return CLINICAL_SPECIALTIES.find((s) => s.code === "TRUYEN_NHIEM") || CLINICAL_SPECIALTIES[0];
+  }
+
+  // 12. GERIATRICS / LÃO KHOA
+  if (chief.includes("người già") || chief.includes("ông bà") || chief.includes("cao tuổi") || chief.includes("lú lẫn") || chief.includes("sa sút trí tuệ")) {
+    return CLINICAL_SPECIALTIES.find((s) => s.code === "LAO_KHOA") || CLINICAL_SPECIALTIES[0];
+  }
+
+  // 13. NEUROLOGY / THẦN KINH
+  if (chief.includes("đầu") || chief.includes("nhức đầu") || chief.includes("chóng mặt") || chief.includes("tiền đình") || chief.includes("tê bì")) {
+    return CLINICAL_SPECIALTIES.find((s) => s.code === "THAN_KINH") || CLINICAL_SPECIALTIES[0];
+  }
+
+  // 14. CARDIOLOGY / TIM MẠCH
+  if (chief.includes("ngực") || chief.includes("tim") || chief.includes("tức ngực") || chief.includes("hồi hộp") || chief.includes("đánh trống ngực")) {
     return CLINICAL_SPECIALTIES.find((s) => s.code === "TIM_MACH") || CLINICAL_SPECIALTIES[0];
   }
 
-  // 3. CHIEF COMPLAINT: GASTRO / TIÊU HÓA (Bụng, dạ dày, ợ chua, thượng vị)
-  if (chief.includes("bụng") || chief.includes("dạ dày") || chief.includes("thượng vị") || chief.includes("ợ chua")) {
+  // 15. GASTROENTEROLOGY / TIÊU HÓA
+  if (chief.includes("bụng") || chief.includes("dạ dày") || chief.includes("thượng vị") || chief.includes("ợ chua") || chief.includes("ợ nóng") || chief.includes("nôn") || chief.includes("gan") || chief.includes("mật") || chief.includes("trào ngược")) {
     return CLINICAL_SPECIALTIES.find((s) => s.code === "TIEU_HOA") || CLINICAL_SPECIALTIES[0];
   }
 
-  // 4. CHIEF COMPLAINT: PULMONARY / HÔ HẤP (Chỉ khi triệu chứng chính là Ho, Khó thở tiên phát)
+  // 16. PULMONOLOGY / HÔ HẤP
   if (chief.includes("ho") || (chief.includes("thở") && !chief.includes("đầu") && !chief.includes("ngực"))) {
     return CLINICAL_SPECIALTIES.find((s) => s.code === "HO_HAP") || CLINICAL_SPECIALTIES[0];
   }
 
-  // 5. PEDIATRIC / NHI KHOA
-  if (chief.includes("cháu") || chief.includes("bé") || chief.includes("con")) {
-    return CLINICAL_SPECIALTIES.find((s) => s.code === "NHI") || CLINICAL_SPECIALTIES[0];
-  }
-
+  // 17. INTERNAL MEDICINE / NỘI TỔNG QUÁT (Mặc định)
   return CLINICAL_SPECIALTIES.find((s) => s.code === "NOI_TONG_QUAT") || CLINICAL_SPECIALTIES[0];
 }
 

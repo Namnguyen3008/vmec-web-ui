@@ -56,24 +56,37 @@ export default function ApprovalsPage() {
   }
 
   useEffect(() => {
-    void listReceptionQueue()
-      .then((data) => {
-        setItems(data);
-        setError(null);
-      })
-      .catch((cause) => {
-        setItems([]);
-        setError(
-          cause instanceof Error
-            ? cause.message
-            : "Không thể tải danh sách yêu cầu chờ duyệt. Vui lòng thử lại.",
-        );
-      })
-      .finally(() => setLoading(false));
+    const load = () => {
+      void listReceptionQueue()
+        .then((data) => {
+          setItems(data);
+          setError(null);
+        })
+        .catch((cause) => {
+          setItems([]);
+          setError(
+            cause instanceof Error
+              ? cause.message
+              : "Không thể tải danh sách yêu cầu chờ duyệt. Vui lòng thử lại.",
+          );
+        })
+        .finally(() => setLoading(false));
 
-    void listReceptionHandovers()
-      .then(setHandovers)
-      .catch(() => setHandovers([]));
+      void listReceptionHandovers()
+        .then(setHandovers)
+        .catch(() => setHandovers([]));
+    };
+
+    load();
+    window.addEventListener("focus", load);
+    window.addEventListener("p208:schedule-change", load);
+    window.addEventListener("vmec:appointments-change", load);
+
+    return () => {
+      window.removeEventListener("focus", load);
+      window.removeEventListener("p208:schedule-change", load);
+      window.removeEventListener("vmec:appointments-change", load);
+    };
   }, []);
 
   function handleRetry() {

@@ -1,5 +1,6 @@
 import { apiRequest } from "@/lib/api/client";
 import type { CheckoutSelection, DoctorOption } from "@/lib/api/contracts";
+import { MASTER_DOCTORS, MASTER_SPECIALTIES, getSpecialtyByCode } from "@/lib/clinicalMasterCatalog";
 
 function mapSelection(value: unknown): CheckoutSelection {
   const raw = value as Record<string, unknown>;
@@ -18,40 +19,14 @@ function mapSelection(value: unknown): CheckoutSelection {
   };
 }
 
-const DEFAULT_DOCTORS: DoctorOption[] = [
-  {
-    id: "doc_01",
-    fullName: "BS.CKII Trần Minh Đức",
-    room: "Phòng 302 - Tòa A",
-    facilityName: "Bệnh viện Đa khoa Quốc tế VMEC",
-    specialtyName: "Khoa Tim Mạch",
-    isPrimarySpecialty: true,
-  },
-  {
-    id: "doc_02",
-    fullName: "TS.BS Nguyễn Thị Mai Lan",
-    room: "Phòng 205 - Tòa B",
-    facilityName: "Bệnh viện Đa khoa Quốc tế VMEC",
-    specialtyName: "Khoa Tiêu Hóa - Gan Mật",
-    isPrimarySpecialty: true,
-  },
-  {
-    id: "doc_03",
-    fullName: "ThS.BS Lê Thu Trang",
-    room: "Phòng 108 - Tòa Nhi",
-    facilityName: "Bệnh viện Đa khoa Quốc tế VMEC",
-    specialtyName: "Khoa Nhi",
-    isPrimarySpecialty: true,
-  },
-  {
-    id: "doc_04",
-    fullName: "PGS.TS Hoàng Văn Bách",
-    room: "Phòng 401 - Tòa A",
-    facilityName: "Bệnh viện Đa khoa Quốc tế VMEC",
-    specialtyName: "Khoa Thần Kinh",
-    isPrimarySpecialty: true,
-  },
-];
+const DEFAULT_DOCTORS: DoctorOption[] = MASTER_DOCTORS.map((doc) => ({
+  id: doc.id,
+  fullName: `${doc.fullName} (${doc.title})`,
+  room: `${doc.room} - ${doc.building}`,
+  facilityName: doc.facilityName,
+  specialtyName: doc.specialtyName,
+  isPrimarySpecialty: true,
+}));
 
 export async function getRecommendations(specialtyId: string): Promise<CheckoutSelection[]> {
   try {
@@ -62,33 +37,42 @@ export async function getRecommendations(specialtyId: string): Promise<CheckoutS
     const alternatives = Array.isArray(raw.alternatives) ? raw.alternatives.map(mapSelection) : [];
     return [...primary, ...alternatives];
   } catch {
-    const today = new Date(Date.now() + 86400000).toISOString();
+    const spec = getSpecialtyByCode(specialtyId) || MASTER_SPECIALTIES[0];
+    const doc = spec.doctors[0] || MASTER_DOCTORS[0];
+
+    const today = new Date(Date.now() + 86400000);
+    const tomorrowSlot1 = new Date(today);
+    tomorrowSlot1.setHours(8, 30, 0, 0);
+
+    const tomorrowSlot2 = new Date(today);
+    tomorrowSlot2.setHours(14, 0, 0, 0);
+
     return [
       {
-        slotId: `slot_${specialtyId}_alt_01`,
-        doctorId: "doc_01",
-        doctorName: "BS.CKII Trần Minh Đức",
-        specialtyId,
-        specialtyName: "Khoa Tim Mạch",
-        facilityId: "fac_01",
-        facilityName: "Bệnh viện Đa khoa Quốc tế VMEC",
-        facilityAddress: "123 Nguyễn Trãi, Thanh Xuân, Hà Nội",
-        room: "Phòng 302",
-        slotStart: today,
-        slotEnd: new Date(Date.now() + 86400000 + 1800000).toISOString(),
+        slotId: `slot_${spec.code}_rec_01`,
+        doctorId: doc.id,
+        doctorName: doc.fullName,
+        specialtyId: spec.code,
+        specialtyName: spec.name,
+        facilityId: "fac_vmec_01",
+        facilityName: spec.facilityName,
+        facilityAddress: spec.facilityAddress,
+        room: `${spec.room} - ${spec.building}`,
+        slotStart: tomorrowSlot1.toISOString(),
+        slotEnd: new Date(tomorrowSlot1.getTime() + 1800000).toISOString(),
       },
       {
-        slotId: `slot_${specialtyId}_alt_02`,
-        doctorId: "doc_02",
-        doctorName: "TS.BS Nguyễn Thị Mai Lan",
-        specialtyId,
-        specialtyName: "Khoa Tiêu Hóa",
-        facilityId: "fac_01",
-        facilityName: "Bệnh viện Đa khoa Quốc tế VMEC",
-        facilityAddress: "123 Nguyễn Trãi, Thanh Xuân, Hà Nội",
-        room: "Phòng 205",
-        slotStart: today,
-        slotEnd: new Date(Date.now() + 86400000 + 1800000).toISOString(),
+        slotId: `slot_${spec.code}_rec_02`,
+        doctorId: doc.id,
+        doctorName: doc.fullName,
+        specialtyId: spec.code,
+        specialtyName: spec.name,
+        facilityId: "fac_vmec_01",
+        facilityName: spec.facilityName,
+        facilityAddress: spec.facilityAddress,
+        room: `${spec.room} - ${spec.building}`,
+        slotStart: tomorrowSlot2.toISOString(),
+        slotEnd: new Date(tomorrowSlot2.getTime() + 1800000).toISOString(),
       },
     ];
   }

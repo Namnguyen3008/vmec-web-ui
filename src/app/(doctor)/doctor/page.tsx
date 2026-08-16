@@ -1,13 +1,17 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
-import { DoctorScheduleTimeline } from "@/components/doctor/DoctorScheduleTimeline";
-import { listDoctorAppointments } from "@/lib/api/appointments";
-import { createDoctorScheduleBlock, getDoctorScheduleBlocks, unblockDoctorScheduleBlock } from "@/lib/api/schedules";
-import type { Appointment, ReceptionScheduleSlot } from "@/lib/api/contracts";
-import { MOCK_DOCTOR_APPOINTMENTS, type DetailedAppointment } from "@/lib/mockData";
+import {
+  getLocalAppointments,
+  listDoctorAppointments,
+  startConsultation,
+  completeConsultation,
+  saveLocalAppointment,
+} from "@/lib/api/appointments";
+import type { DetailedAppointment, DetailedPatientSnapshot } from "@/lib/mockData";
+import { MASTER_DOCTORS, MASTER_SPECIALTIES } from "@/lib/clinicalMasterCatalog";
 import {
   Activity,
   BrainCircuit,
@@ -21,253 +25,385 @@ import {
   MapPin,
   Calendar,
   ShieldAlert,
+  Clock,
+  Plus,
+  Trash2,
+  Filter,
+  Check,
+  ChevronRight,
+  Pill,
+  ClipboardList,
 } from "lucide-react";
 
-const REALTIME_REFRESH_MS = 15_000;
-
-function clinicDateKey(date = new Date()) {
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    timeZone: "Asia/Bangkok",
-  }).formatToParts(date);
-  const part = (type: Intl.DateTimeFormatPartTypes) =>
-    parts.find((item) => item.type === type)?.value || "";
-  return `${part("year")}-${part("month")}-${part("day")}`;
-}
-
-function mergeAppointmentDetails(apiItems: Appointment[]): DetailedAppointment[] {
-  return apiItems.map((apiItem, idx) => {
-    const fallbackMock = MOCK_DOCTOR_APPOINTMENTS[idx % MOCK_DOCTOR_APPOINTMENTS.length];
-    return {
-      ...fallbackMock,
-      ...apiItem,
-      patientDetail: {
-        ...fallbackMock.patientDetail,
-        fullName: String(apiItem.patientSnapshot.full_name || fallbackMock.patientDetail.fullName),
-        phoneNumber: String(apiItem.patientSnapshot.phone_number || fallbackMock.patientDetail.phoneNumber),
-      },
-    };
-  });
-}
-
 export default function DoctorDashboardPage() {
-  const [items, setItems] = useState<DetailedAppointment[]>(MOCK_DOCTOR_APPOINTMENTS);
-  const [scheduleAppointments, setScheduleAppointments] = useState<Appointment[]>([]);
-  const [doctorBlocks, setDoctorBlocks] = useState<ReceptionScheduleSlot[]>([]);
-  const [timelineDate, setTimelineDate] = useState(clinicDateKey);
-  const [error, setError] = useState<string | null>(null);
-  const [blockError, setBlockError] = useState<string | null>(null);
+  const [selectedDoctorId, setSelectedDoctorId] = useState<string>("all");
+  const [activeTab, setActiveTab] = useState<"ALL" | "CONFIRMED" | "IN_PROGRESS" | "COMPLETED">("ALL");
+  const [appointments, setAppointments] = useState<DetailedAppointment[]>([]);
   const [selectedPatient, setSelectedPatient] = useState<DetailedAppointment | null>(null);
+
+  // EMR Form State inside modal
   const [doctorNoteInput, setDoctorNoteInput] = useState<string>("");
-  const [saveSuccess, setSaveSuccess] = useState<boolean>(false);
+  const [diagnosisInput, setDiagnosisInput] = useState<string>("");
+  const [vitalSigns, setVitalSigns] = useState({
+    bloodPressure: "120/80",
+    heartRate: 75,
+    temperature: 36.6,
+    spO2: 99,
+    weight: 60,
+  });
+  const [prescriptions, setPrescriptions] = useState<Array<{ medicineName: string; dosage: string; usage: string; quantity: string }>>([]);
+  const [diagnosticOrders, setDiagnosticOrders] = useState<Array<{ testName: string; department: string; status: "ORDERED" | "COMPLETED"; resultSummary?: string }>>([]);
+
+  // New item inputs
+  const [newMedName, setNewMedName] = useState("");
+  const [newMedDosage, setNewMedDosage] = useState("");
+  const [newMedUsage, setNewMedUsage] = useState("");
+  const [newMedQty, setNewMedQty] = useState("");
+  const [newTestName, setNewTestName] = useState("");
+  const [newTestDept, setNewTestDept] = useState("");
+
+  const [notification, setNotification] = useState<string | null>(null);
+
+  const showToast = (msg: string) => {
+    setNotification(msg);
+    setTimeout(() => setNotification(null), 3500);
+  };
+
+  const refreshData = () => {
+    const list = getLocalAppointments();
+    setAppointments(list);
+  };
 
   useEffect(() => {
-    let active = true;
-    let refreshing = false;
-
-    const refresh = () => {
-      if (refreshing || document.visibilityState === "hidden") return;
-      refreshing = true;
-      void Promise.allSettled([
-        listDoctorAppointments(),
-        getDoctorScheduleBlocks(timelineDate),
-      ]).then(([appointmentsResult, blocksResult]) => {
-        if (!active) return;
-        refreshing = false;
-        if (appointmentsResult.status === "fulfilled") {
-          setScheduleAppointments(appointmentsResult.value);
-          setItems(appointmentsResult.value.length ? mergeAppointmentDetails(appointmentsResult.value) : MOCK_DOCTOR_APPOINTMENTS);
-          setError(null);
-        } else {
-          setError("Không thể đồng bộ lịch khám đã xác nhận. Hệ thống sẽ tự thử lại.");
-        }
-        if (blocksResult.status === "fulfilled") {
-          setDoctorBlocks(blocksResult.value);
-          setBlockError(null);
-        } else {
-          setBlockError("Không thể đồng bộ các khoảng thời gian đã khóa. Hệ thống sẽ tự thử lại.");
-        }
-      });
-    };
-
-    const initialRefresh = window.setTimeout(refresh, 0);
-    const interval = window.setInterval(refresh, REALTIME_REFRESH_MS);
-    const refreshWhenVisible = () => {
-      if (document.visibilityState === "visible") refresh();
-    };
-    window.addEventListener("focus", refresh);
-    window.addEventListener("p208:schedule-change", refresh);
-    document.addEventListener("visibilitychange", refreshWhenVisible);
+    refreshData();
+    const handleUpdate = () => refreshData();
+    window.addEventListener("focus", handleUpdate);
+    window.addEventListener("p208:schedule-change", handleUpdate);
+    window.addEventListener("vmec:appointments-change", handleUpdate);
 
     return () => {
-      active = false;
-      window.clearTimeout(initialRefresh);
-      window.clearInterval(interval);
-      window.removeEventListener("focus", refresh);
-      window.removeEventListener("p208:schedule-change", refresh);
-      document.removeEventListener("visibilitychange", refreshWhenVisible);
+      window.removeEventListener("focus", handleUpdate);
+      window.removeEventListener("p208:schedule-change", handleUpdate);
+      window.removeEventListener("vmec:appointments-change", handleUpdate);
     };
-  }, [timelineDate]);
+  }, []);
 
-  const openDetailModal = (item: DetailedAppointment) => {
+  const filteredAppointments = useMemo(() => {
+    return appointments.filter((item) => {
+      // Filter by doctor / specialty
+      if (selectedDoctorId !== "all") {
+        const matchDoctor = item.doctorId === selectedDoctorId;
+        const matchSpec = (item.specialtyId || "").toUpperCase() === selectedDoctorId.toUpperCase();
+        if (!matchDoctor && !matchSpec) return false;
+      }
+      // Filter by tab
+      if (activeTab === "ALL") return item.status !== "CANCELLED";
+      if (activeTab === "CONFIRMED") return item.status === "CONFIRMED";
+      if (activeTab === "IN_PROGRESS") return item.status === "CONFIRMED" && Boolean(item.confirmedAt);
+      if (activeTab === "COMPLETED") return item.status === "COMPLETED";
+      return true;
+    });
+  }, [appointments, selectedDoctorId, activeTab]);
+
+  const openConsultationModal = (item: DetailedAppointment) => {
     setSelectedPatient(item);
     setDoctorNoteInput(item.patientDetail.clinicalNote || "");
-    setSaveSuccess(false);
+    setDiagnosisInput(item.patientDetail.aiAssessment?.preliminaryDiagnosis || item.specialtyName || "");
+    if (item.patientDetail.vitalSigns) {
+      setVitalSigns({ ...item.patientDetail.vitalSigns });
+    }
+    setPrescriptions(item.patientDetail.prescriptions ? [...item.patientDetail.prescriptions] : []);
+    setDiagnosticOrders(item.patientDetail.diagnosticOrders ? [...item.patientDetail.diagnosticOrders] : []);
   };
 
-  const handleSaveNote = () => {
-    if (!selectedPatient) return;
-    const updatedItems = items.map((item) => {
-      if (item.id === selectedPatient.id) {
-        return {
-          ...item,
-          patientDetail: {
-            ...item.patientDetail,
-            clinicalNote: doctorNoteInput,
-          },
-        };
-      }
-      return item;
-    });
-    setItems(updatedItems);
-    setSelectedPatient({
-      ...selectedPatient,
-      patientDetail: {
-        ...selectedPatient.patientDetail,
-        clinicalNote: doctorNoteInput,
+  const handleAddPrescription = () => {
+    if (!newMedName.trim()) return;
+    setPrescriptions([
+      ...prescriptions,
+      {
+        medicineName: newMedName.trim(),
+        dosage: newMedDosage.trim() || "1 viên/lần",
+        usage: newMedUsage.trim() || "Uống sau ăn",
+        quantity: newMedQty.trim() || "30 viên",
       },
-    });
-    setSaveSuccess(true);
-    setTimeout(() => setSaveSuccess(false), 3000);
+    ]);
+    setNewMedName("");
+    setNewMedDosage("");
+    setNewMedUsage("");
+    setNewMedQty("");
   };
+
+  const handleRemovePrescription = (idx: number) => {
+    setPrescriptions(prescriptions.filter((_, i) => i !== idx));
+  };
+
+  const handleAddDiagnosticOrder = () => {
+    if (!newTestName.trim()) return;
+    setDiagnosticOrders([
+      ...diagnosticOrders,
+      {
+        testName: newTestName.trim(),
+        department: newTestDept.trim() || "Khoa Cận lâm sàng & Thăm dò chức năng",
+        status: "ORDERED",
+      },
+    ]);
+    setNewTestName("");
+    setNewTestDept("");
+  };
+
+  const handleSaveConsultation = async (status: "SAVE_DRAFT" | "COMPLETE") => {
+    if (!selectedPatient) return;
+
+    if (status === "COMPLETE") {
+      await completeConsultation(
+        selectedPatient.id,
+        doctorNoteInput.trim() || "Khám và tư vấn lâm sàng hoàn tất.",
+        prescriptions,
+        diagnosticOrders
+      );
+      showToast("Đã hoàn tất phiên khám và xuất hồ sơ bệnh án thành công!");
+    } else {
+      const updated: DetailedAppointment = {
+        ...selectedPatient,
+        patientDetail: {
+          ...selectedPatient.patientDetail,
+          clinicalNote: doctorNoteInput,
+          vitalSigns,
+          prescriptions,
+          diagnosticOrders,
+        },
+      };
+      saveLocalAppointment(updated);
+      showToast("Đã lưu bản nháp hồ sơ bệnh án!");
+    }
+
+    refreshData();
+    setSelectedPatient(null);
+  };
+
+  const currentDoctor = MASTER_DOCTORS.find((d) => d.id === selectedDoctorId);
 
   return (
-    <div className="p-6">
-      <div className="flex items-end justify-between gap-4">
+    <div className="p-6 max-w-7xl mx-auto space-y-6">
+      {/* Toast Notification */}
+      {notification && (
+        <div className="fixed top-5 right-5 z-50 rounded-xl bg-teal-800 text-white px-5 py-3 shadow-2xl flex items-center gap-2 animate-in fade-in slide-in-from-top-4">
+          <CheckCircle2 size={18} className="text-teal-300" />
+          <span className="text-body font-medium">{notification}</span>
+        </div>
+      )}
+
+      {/* Header & Doctor Switcher */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-surface p-6 rounded-2xl border border-line shadow-xs">
         <div>
-          <h1 className="text-h1 font-bold text-ink-900">Lịch khám đã xác nhận</h1>
-          <p className="mt-1 text-body-lg text-ink-700">
-            Danh sách bệnh nhân đã hoàn tất xác nhận lịch khám. Xem chi tiết hồ sơ bệnh án &amp; sinh hiệu bên dưới.
+          <div className="flex items-center gap-2">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-100 text-primary-800">
+              <Stethoscope size={22} />
+            </div>
+            <div>
+              <h1 className="text-h2 font-bold text-ink-900">Bàn Khám Bác Sĩ &amp; Hồ Sơ Bệnh Án Điện Tử</h1>
+              <p className="text-caption text-ink-600">
+                Tiếp nhận bệnh nhân từ AI Triage &amp; Lễ tân điều phối · 17 Chuyên khoa chuẩn VMEC
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Doctor Switcher Dropdown */}
+        <div className="flex items-center gap-3">
+          <label className="text-caption font-semibold text-ink-700 whitespace-nowrap flex items-center gap-1.5">
+            <Filter size={15} /> Bác sĩ / Chuyên khoa:
+          </label>
+          <select
+            value={selectedDoctorId}
+            onChange={(e) => setSelectedDoctorId(e.target.value)}
+            className="rounded-xl border border-line bg-bg-soft px-3.5 py-2 text-body font-medium text-ink-900 focus:border-primary-500 focus:outline-none shadow-2xs"
+          >
+            <option value="all">🩺 Toàn bộ 17 Chuyên khoa (Tất cả bác sĩ)</option>
+            {MASTER_DOCTORS.map((doc) => (
+              <option key={doc.id} value={doc.id}>
+                👨‍⚕️ {doc.fullName} ({doc.specialtyName} - {doc.room})
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {/* Doctor Summary Banner if specific doctor selected */}
+      {currentDoctor && (
+        <div className="flex items-center gap-4 bg-teal-50/70 border border-teal-200 p-4 rounded-2xl">
+          <img
+            src={currentDoctor.avatar}
+            alt={currentDoctor.fullName}
+            className="w-14 h-14 rounded-full object-cover border-2 border-white shadow-xs"
+          />
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2">
+              <h3 className="text-body-lg font-bold text-teal-950">{currentDoctor.fullName}</h3>
+              <Badge tone="success">{currentDoctor.title}</Badge>
+            </div>
+            <p className="text-caption text-teal-800 mt-0.5">
+              {currentDoctor.specialtyName} · {currentDoctor.room} ({currentDoctor.building}) · {currentDoctor.experienceYears} năm kinh nghiệm
+            </p>
+            <div className="flex flex-wrap gap-1.5 mt-1.5">
+              {currentDoctor.subspecialties.map((sub, i) => (
+                <span key={i} className="text-caption bg-white/90 text-teal-900 border border-teal-200/80 px-2 py-0.5 rounded-md font-medium">
+                  {sub}
+                </span>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Filter Tabs */}
+      <div className="flex items-center justify-between border-b border-line pb-3">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setActiveTab("ALL")}
+            className={`px-3.5 py-1.5 rounded-lg text-body font-medium transition-all ${
+              activeTab === "ALL"
+                ? "bg-primary-900 text-white shadow-xs"
+                : "text-ink-700 hover:bg-bg-muted"
+            }`}
+          >
+            Tất cả ({appointments.filter((a) => a.status !== "CANCELLED").length})
+          </button>
+          <button
+            onClick={() => setActiveTab("CONFIRMED")}
+            className={`px-3.5 py-1.5 rounded-lg text-body font-medium transition-all ${
+              activeTab === "CONFIRMED"
+                ? "bg-primary-900 text-white shadow-xs"
+                : "text-ink-700 hover:bg-bg-muted"
+            }`}
+          >
+            Chờ khám &amp; Đã duyệt ({appointments.filter((a) => a.status === "CONFIRMED").length})
+          </button>
+          <button
+            onClick={() => setActiveTab("COMPLETED")}
+            className={`px-3.5 py-1.5 rounded-lg text-body font-medium transition-all ${
+              activeTab === "COMPLETED"
+                ? "bg-primary-900 text-white shadow-xs"
+                : "text-ink-700 hover:bg-bg-muted"
+            }`}
+          >
+            Đã hoàn thành ({appointments.filter((a) => a.status === "COMPLETED").length})
+          </button>
+        </div>
+        <span className="text-caption text-ink-500 font-medium">
+          Hiển thị <strong>{filteredAppointments.length}</strong> ca khám
+        </span>
+      </div>
+
+      {/* Appointment Queue Grid */}
+      {filteredAppointments.length === 0 ? (
+        <div className="rounded-2xl border border-line bg-surface p-12 text-center">
+          <Stethoscope size={36} className="mx-auto text-ink-300 mb-3" />
+          <h3 className="text-body-lg font-bold text-ink-800">Không có ca khám nào trong hàng chờ</h3>
+          <p className="text-caption text-ink-500 mt-1 max-w-md mx-auto">
+            Khi bệnh nhân hoàn tất đặt khám từ AI Chat hoặc được Lễ tân phê duyệt, danh sách sẽ tự động xuất hiện tại đây.
           </p>
         </div>
-        <Badge tone="success">{items.length} bệnh nhân</Badge>
-      </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          {filteredAppointments.map((apt) => {
+            const isCompleted = apt.status === "COMPLETED";
+            const detail = apt.patientDetail;
 
-      {error && <p role="alert" className="mt-4 rounded-xl bg-danger-soft p-3 text-danger">{error}</p>}
-      {blockError && <p role="alert" className="mt-4 rounded-xl bg-danger-soft p-3 text-danger">{blockError}</p>}
-
-      <DoctorScheduleTimeline
-        appointments={scheduleAppointments}
-        blocks={doctorBlocks}
-        selectedDate={timelineDate}
-        onDateChange={setTimelineDate}
-        onCreateBlock={async (input) => {
-          await createDoctorScheduleBlock(input);
-          const date = input.startTime.slice(0, 10);
-          setDoctorBlocks(await getDoctorScheduleBlocks(date));
-        }}
-        onUnblockBlock={async (slotId, date) => {
-          await unblockDoctorScheduleBlock(slotId);
-          setDoctorBlocks(await getDoctorScheduleBlocks(date));
-        }}
-        onSelectAppointment={(appointment) => {
-          const detail = items.find((item) => item.id === appointment.id);
-          if (detail) openDetailModal(detail);
-        }}
-      />
-
-      <div className="mt-6 grid gap-5 lg:grid-cols-2">
-        {items.length === 0 && (
-          <p className="rounded-card border border-line bg-surface p-6 text-ink-500">
-            Chưa có lịch khám đã xác nhận.
-          </p>
-        )}
-        {items.map((item) => {
-          const detail = item.patientDetail;
-          return (
-            <article
-              key={item.id}
-              className="flex flex-col justify-between rounded-card border border-line bg-surface p-5 shadow-xs transition-shadow hover:shadow-md"
-            >
-              <div>
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary-100 text-primary-700 font-bold text-lg">
-                      {detail.fullName.slice(0, 1).toUpperCase()}
+            return (
+              <div
+                key={apt.id}
+                className={`rounded-2xl border transition-all p-5 flex flex-col justify-between bg-surface shadow-xs hover:shadow-md ${
+                  isCompleted ? "border-line bg-bg-soft/30 opacity-90" : "border-teal-200/80 hover:border-teal-400"
+                }`}
+              >
+                <div>
+                  {/* Top Bar */}
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-primary-100 text-primary-800 font-bold flex items-center justify-center text-body">
+                        {detail.fullName.charAt(0)}
+                      </div>
+                      <div>
+                        <h4 className="text-body-lg font-bold text-ink-900 leading-snug">{detail.fullName}</h4>
+                        <p className="text-caption text-ink-500">
+                          {detail.medicalCode} · {detail.age}t ({detail.gender === "MALE" ? "Nam" : "Nữ"})
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <h3 className="text-body-lg font-bold text-ink-900">{detail.fullName}</h3>
-                      <p className="text-caption text-ink-500">
-                        Mã BN: <span className="font-semibold text-ink-700">{detail.medicalCode}</span> · {detail.age} tuổi ({detail.gender === "MALE" ? "Nam" : "Nữ"})
-                      </p>
-                    </div>
+                    <Badge tone={isCompleted ? "neutral" : "success"}>
+                      {isCompleted ? "Đã khám" : "Chờ khám"}
+                    </Badge>
                   </div>
-                  <Badge tone="success">Đã xác nhận</Badge>
+
+                  {/* Time & Room */}
+                  <div className="mt-3.5 flex items-center gap-2 text-caption bg-bg-soft px-3 py-1.5 rounded-lg text-ink-800">
+                    <Calendar size={14} className="text-primary-700 shrink-0" />
+                    <span className="font-semibold">{apt.specialtyName}</span> · <span>{apt.room}</span>
+                  </div>
+
+                  {/* Reason & AI Triage */}
+                  <div className="mt-3 text-caption text-ink-800 bg-teal-50/40 p-2.5 rounded-lg border border-teal-100">
+                    <strong className="text-teal-950 block mb-0.5">Lý do khám:</strong>
+                    {apt.bookingReason}
+                  </div>
+
+                  {/* Vital Signs Mini Badges */}
+                  {detail.vitalSigns && (
+                    <div className="mt-3 flex flex-wrap gap-1.5 text-caption">
+                      <span className="inline-flex items-center gap-1 bg-surface border border-line px-2 py-0.5 rounded text-ink-700">
+                        <Heart size={12} className="text-red-500" /> HA: <strong>{detail.vitalSigns.bloodPressure}</strong>
+                      </span>
+                      <span className="inline-flex items-center gap-1 bg-surface border border-line px-2 py-0.5 rounded text-ink-700">
+                        <Activity size={12} className="text-teal-600" /> Tim: <strong>{detail.vitalSigns.heartRate} bpm</strong>
+                      </span>
+                      <span className="inline-flex items-center gap-1 bg-surface border border-line px-2 py-0.5 rounded text-ink-700">
+                        SpO2: <strong>{detail.vitalSigns.spO2}%</strong>
+                      </span>
+                    </div>
+                  )}
                 </div>
 
-                {item.slotStart && (
-                  <div className="mt-4 flex items-center gap-2 rounded-xl bg-primary-50/50 px-3 py-2 text-body font-semibold text-primary-900">
-                    <Calendar size={16} className="text-primary-700 shrink-0" />
-                    <span>
-                      {new Intl.DateTimeFormat("vi-VN", { dateStyle: "full", timeStyle: "short" }).format(new Date(item.slotStart))}
-                    </span>
-                  </div>
-                )}
-
-                <div className="mt-3 text-body text-ink-700">
-                  <span className="font-semibold">{item.specialtyName}</span> · {item.room}
+                {/* Footer Action */}
+                <div className="mt-5 pt-3.5 border-t border-line flex items-center justify-between">
+                  <span className="text-caption text-ink-500 flex items-center gap-1">
+                    <Phone size={12} /> {detail.phoneNumber}
+                  </span>
+                  <Button
+                    size="sm"
+                    variant={isCompleted ? "outline" : "primary"}
+                    onClick={() => openConsultationModal(apt)}
+                  >
+                    <FileText size={14} className="mr-1.5" />
+                    {isCompleted ? "Xem bệnh án" : "Khám & Kê đơn"}
+                  </Button>
                 </div>
-
-                {item.bookingReason && (
-                  <div className="mt-3 rounded-xl bg-bg-muted p-3 text-body text-ink-800">
-                    <strong className="text-ink-900">Lý do khám:</strong> {item.bookingReason}
-                  </div>
-                )}
-
-                {/* Quick preview of Vital Signs */}
-                {detail.vitalSigns && (
-                  <div className="mt-3 flex flex-wrap gap-2 text-caption">
-                    <span className="inline-flex items-center gap-1 rounded-lg bg-surface border border-line px-2.5 py-1 text-ink-700">
-                      <Heart size={13} className="text-danger shrink-0" /> HA: <strong className="text-ink-900">{detail.vitalSigns.bloodPressure}</strong>
-                    </span>
-                    <span className="inline-flex items-center gap-1 rounded-lg bg-surface border border-line px-2.5 py-1 text-ink-700">
-                      <Activity size={13} className="text-primary-600 shrink-0" /> Tim: <strong className="text-ink-900">{detail.vitalSigns.heartRate} bpm</strong>
-                    </span>
-                    <span className="inline-flex items-center gap-1 rounded-lg bg-surface border border-line px-2.5 py-1 text-ink-700">
-                      SpO2: <strong className="text-ink-900">{detail.vitalSigns.spO2}%</strong>
-                    </span>
-                  </div>
-                )}
               </div>
+            );
+          })}
+        </div>
+      )}
 
-              <div className="mt-5 border-t border-line pt-4 flex items-center justify-between">
-                <span className="text-caption text-ink-500 flex items-center gap-1">
-                  <Phone size={13} /> {detail.phoneNumber}
-                </span>
-                <Button size="sm" variant="outline" onClick={() => openDetailModal(item)}>
-                  <FileText size={15} className="mr-1" /> Xem hồ sơ chi tiết
-                </Button>
-              </div>
-            </article>
-          );
-        })}
-      </div>
-
-      {/* PATIENT DETAIL MODAL */}
+      {/* DETAILED EMR CONSULTATION MODAL */}
       {selectedPatient && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink-900/60 p-4 backdrop-blur-xs animate-in fade-in duration-200">
-          <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-card border border-line bg-surface shadow-2xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="max-h-[92vh] w-full max-w-4xl overflow-y-auto rounded-2xl border border-line bg-surface shadow-2xl flex flex-col">
             {/* Modal Header */}
-            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-line bg-surface p-5">
+            <div className="sticky top-0 z-20 flex items-center justify-between border-b border-line bg-surface px-6 py-4">
               <div className="flex items-center gap-3">
-                <div className="flex h-11 w-11 items-center justify-center rounded-full bg-primary-100 text-primary-700 font-bold text-xl">
+                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary-100 text-primary-800 font-bold">
                   <Stethoscope size={22} />
                 </div>
                 <div>
-                  <h2 className="text-h2 font-bold text-ink-900">Hồ sơ chi tiết bệnh nhân</h2>
-                  <p className="text-caption text-ink-500">Mã cuộc hẹn: {selectedPatient.appointmentCode}</p>
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-h2 font-bold text-ink-900">{selectedPatient.patientDetail.fullName}</h2>
+                    <Badge tone={selectedPatient.status === "COMPLETED" ? "neutral" : "success"}>
+                      {selectedPatient.status === "COMPLETED" ? "Đã hoàn thành" : "Đang khám"}
+                    </Badge>
+                  </div>
+                  <p className="text-caption text-ink-500">
+                    Mã BN: <strong>{selectedPatient.patientDetail.medicalCode}</strong> · Mã hẹn: {selectedPatient.appointmentCode} · {selectedPatient.specialtyName} ({selectedPatient.room})
+                  </p>
                 </div>
               </div>
               <button
@@ -278,172 +414,248 @@ export default function DoctorDashboardPage() {
               </button>
             </div>
 
-            {/* Modal Content */}
-            <div className="p-6 space-y-6">
-              {/* Patient Basic Info Card */}
-              <section className="rounded-xl border border-line bg-bg-soft/40 p-4">
-                <h3 className="font-bold text-ink-900 flex items-center gap-2 text-body-lg">
-                  <User size={18} className="text-primary-700" /> Thông tin hành chính
-                </h3>
-                <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-body">
-                  <div>
-                    <span className="text-caption text-ink-500 block">Họ và tên</span>
-                    <strong className="text-ink-900">{selectedPatient.patientDetail.fullName}</strong>
+            {/* Modal Body */}
+            <div className="p-6 space-y-6 flex-1 overflow-y-auto">
+              {/* Row 1: Administrative Info & AI Triage Summary */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                {/* Administrative Card */}
+                <div className="rounded-xl border border-line bg-bg-soft/40 p-4 space-y-2.5">
+                  <h3 className="font-bold text-ink-900 flex items-center gap-2 text-body">
+                    <User size={16} className="text-primary-700" /> Thông tin bệnh nhân
+                  </h3>
+                  <div className="grid grid-cols-2 gap-2 text-body">
+                    <div>
+                      <span className="text-caption text-ink-500 block">Tuổi &amp; Giới tính</span>
+                      <strong className="text-ink-900">{selectedPatient.patientDetail.age} tuổi ({selectedPatient.patientDetail.gender === "MALE" ? "Nam" : "Nữ"})</strong>
+                    </div>
+                    <div>
+                      <span className="text-caption text-ink-500 block">Số điện thoại</span>
+                      <strong className="text-ink-900">{selectedPatient.patientDetail.phoneNumber}</strong>
+                    </div>
+                    <div>
+                      <span className="text-caption text-ink-500 block">Nhóm máu</span>
+                      <strong className="text-ink-900">{selectedPatient.patientDetail.bloodType || "O+"}</strong>
+                    </div>
+                    <div>
+                      <span className="text-caption text-ink-500 block">Tiền sử dị ứng</span>
+                      <span className="text-caption font-semibold text-danger">
+                        {selectedPatient.patientDetail.allergies?.length ? selectedPatient.patientDetail.allergies.join(", ") : "Không có ghi nhận"}
+                      </span>
+                    </div>
                   </div>
-                  <div>
-                    <span className="text-caption text-ink-500 block">Mã bệnh nhân</span>
-                    <strong className="text-ink-900">{selectedPatient.patientDetail.medicalCode}</strong>
-                  </div>
-                  <div>
-                    <span className="text-caption text-ink-500 block">Tuổi / Giới tính</span>
-                    <strong className="text-ink-900">
-                      {selectedPatient.patientDetail.age} tuổi ({selectedPatient.patientDetail.gender === "MALE" ? "Nam" : "Nữ"})
-                    </strong>
-                  </div>
-                  <div>
-                    <span className="text-caption text-ink-500 block">Số điện thoại</span>
-                    <strong className="text-ink-900">{selectedPatient.patientDetail.phoneNumber}</strong>
-                  </div>
-                  <div>
-                    <span className="text-caption text-ink-500 block">Nhóm máu</span>
-                    <strong className="text-ink-900">{selectedPatient.patientDetail.bloodType || "Chưa ghi nhận"}</strong>
-                  </div>
-                  <div>
-                    <span className="text-caption text-ink-500 block">Đối tượng đăng ký</span>
-                    <strong className="text-ink-900">
-                      {selectedPatient.patientDetail.patientSubject === "SELF" ? "Bản thân" : `Thân nhân (${selectedPatient.patientDetail.relationship || "N/A"})`}
-                    </strong>
-                  </div>
-                  <div className="sm:col-span-2 lg:col-span-3">
-                    <span className="text-caption text-ink-500 block flex items-center gap-1">
-                      <MapPin size={12} /> Địa chỉ liên hệ
-                    </span>
-                    <span className="text-ink-900">{selectedPatient.patientDetail.address || "Chưa cập nhật"}</span>
+                  <div className="pt-2 border-t border-line/60">
+                    <span className="text-caption text-ink-500 block">Địa chỉ:</span>
+                    <span className="text-caption text-ink-800">{selectedPatient.patientDetail.address || "Hà Nội"}</span>
                   </div>
                 </div>
-              </section>
 
-              {/* Vital Signs Grid */}
-              {selectedPatient.patientDetail.vitalSigns && (
-                <section>
-                  <h3 className="font-bold text-ink-900 flex items-center gap-2 text-body-lg">
-                    <Activity size={18} className="text-danger" /> Sinh hiệu lâm sàng ban đầu
+                {/* AI Triage & RAG Citations Card */}
+                <div className="rounded-xl border border-teal-200 bg-teal-50/40 p-4 space-y-2">
+                  <h3 className="font-bold text-teal-950 flex items-center gap-2 text-body">
+                    <BrainCircuit size={16} className="text-teal-700" /> Phân tích Lâm sàng AI (MedAgent Triage)
                   </h3>
-                  <div className="mt-3 grid grid-cols-2 sm:grid-cols-5 gap-3">
-                    <div className="rounded-xl border border-line bg-surface p-3 text-center">
-                      <span className="text-caption text-ink-500 block">Huyết áp</span>
-                      <strong className="text-body-lg text-ink-900">{selectedPatient.patientDetail.vitalSigns.bloodPressure}</strong>
-                      <span className="text-caption text-ink-400 block">mmHg</span>
-                    </div>
-                    <div className="rounded-xl border border-line bg-surface p-3 text-center">
-                      <span className="text-caption text-ink-500 block">Nhịp tim</span>
-                      <strong className="text-body-lg text-ink-900">{selectedPatient.patientDetail.vitalSigns.heartRate}</strong>
-                      <span className="text-caption text-ink-400 block">bpm</span>
-                    </div>
-                    <div className="rounded-xl border border-line bg-surface p-3 text-center">
-                      <span className="text-caption text-ink-500 block">Thân nhiệt</span>
-                      <strong className="text-body-lg text-ink-900">{selectedPatient.patientDetail.vitalSigns.temperature}</strong>
-                      <span className="text-caption text-ink-400 block">°C</span>
-                    </div>
-                    <div className="rounded-xl border border-line bg-surface p-3 text-center">
-                      <span className="text-caption text-ink-500 block">SpO2</span>
-                      <strong className="text-body-lg text-ink-900">{selectedPatient.patientDetail.vitalSigns.spO2}</strong>
-                      <span className="text-caption text-ink-400 block">%</span>
-                    </div>
-                    <div className="rounded-xl border border-line bg-surface p-3 text-center">
-                      <span className="text-caption text-ink-500 block">Cân nặng</span>
-                      <strong className="text-body-lg text-ink-900">{selectedPatient.patientDetail.vitalSigns.weight}</strong>
-                      <span className="text-caption text-ink-400 block">kg</span>
-                    </div>
-                  </div>
-                </section>
-              )}
-
-              {/* Medical History & Allergies */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <section className="rounded-xl border border-line bg-surface p-4">
-                  <h3 className="font-bold text-ink-900 flex items-center gap-2 text-body">
-                    <ShieldAlert size={16} className="text-warning" /> Tiền sử dị ứng
-                  </h3>
-                  <div className="mt-2 flex flex-wrap gap-1.5">
-                    {selectedPatient.patientDetail.allergies?.map((allergy, i) => (
-                      <span key={i} className="rounded-lg bg-warning-soft px-2.5 py-1 text-caption font-semibold text-warning">
-                        {allergy}
-                      </span>
-                    )) || <span className="text-caption text-ink-500">Không ghi nhận</span>}
-                  </div>
-                </section>
-
-                <section className="rounded-xl border border-line bg-surface p-4">
-                  <h3 className="font-bold text-ink-900 flex items-center gap-2 text-body">
-                    <FileText size={16} className="text-primary-700" /> Bệnh lý nền
-                  </h3>
-                  <div className="mt-2 flex flex-wrap gap-1.5">
-                    {selectedPatient.patientDetail.medicalHistory?.map((history, i) => (
-                      <span key={i} className="rounded-lg bg-bg-muted px-2.5 py-1 text-caption text-ink-800">
-                        {history}
-                      </span>
-                    )) || <span className="text-caption text-ink-500">Không ghi nhận</span>}
-                  </div>
-                </section>
-              </div>
-
-              {/* AI Assessment & Triage */}
-              {selectedPatient.patientDetail.aiAssessment && (
-                <section className="rounded-xl border border-primary-200 bg-primary-50/40 p-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <h3 className="font-bold text-ink-900 flex items-center gap-2 text-body-lg">
-                      <BrainCircuit size={18} className="text-primary-700" /> Đánh giá ban đầu từ AI &amp; Lễ tân
-                    </h3>
-                  </div>
-                  <div className="mt-3 space-y-2 text-body text-ink-800">
+                  <div className="text-body text-ink-800 space-y-1.5">
                     <p>
-                      <strong>Chẩn đoán sơ bộ AI:</strong> {selectedPatient.patientDetail.aiAssessment.preliminaryDiagnosis}
+                      <strong>Chẩn đoán sơ bộ:</strong> {selectedPatient.patientDetail.aiAssessment?.preliminaryDiagnosis || selectedPatient.specialtyName}
                     </p>
                     <p className="text-caption text-ink-700">
-                      <strong>Lý giải AI:</strong> {selectedPatient.patientDetail.aiAssessment.reasoning}
+                      <strong>Lý giải AI:</strong> {selectedPatient.patientDetail.aiAssessment?.reasoning}
                     </p>
                     {selectedPatient.patientDetail.receptionistNote && (
-                      <p className="mt-2 rounded-lg bg-surface border border-line p-2.5 text-caption text-ink-700">
-                        <strong>Ghi chú điều phối Lễ tân:</strong> {selectedPatient.patientDetail.receptionistNote}
+                      <p className="text-caption bg-white p-2 rounded border border-teal-200 text-teal-900">
+                        <strong>Ghi chú Lễ tân:</strong> {selectedPatient.patientDetail.receptionistNote}
                       </p>
                     )}
                   </div>
-                </section>
-              )}
+                </div>
+              </div>
 
-              {/* Doctor Clinical Notes Form */}
-              <section className="rounded-xl border border-line bg-surface p-4">
-                <h3 className="font-bold text-ink-900 flex items-center gap-2 text-body-lg">
-                  <Stethoscope size={18} className="text-primary-700" /> Ghi chú khám &amp; Chỉ định Bác sĩ
+              {/* Row 2: Editable Vital Signs */}
+              <div className="rounded-xl border border-line bg-surface p-4">
+                <h3 className="font-bold text-ink-900 flex items-center gap-2 text-body mb-3">
+                  <Activity size={16} className="text-danger" /> Dấu hiệu sinh tồn lâm sàng (Vital Signs)
+                </h3>
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                  <div className="rounded-lg border border-line p-2.5 bg-bg-soft">
+                    <label className="text-caption text-ink-500 block">Huyết áp (mmHg)</label>
+                    <input
+                      type="text"
+                      value={vitalSigns.bloodPressure}
+                      onChange={(e) => setVitalSigns({ ...vitalSigns, bloodPressure: e.target.value })}
+                      className="w-full bg-white font-bold text-ink-900 px-2 py-1 rounded border border-line mt-1 text-body"
+                    />
+                  </div>
+                  <div className="rounded-lg border border-line p-2.5 bg-bg-soft">
+                    <label className="text-caption text-ink-500 block">Nhịp tim (bpm)</label>
+                    <input
+                      type="number"
+                      value={vitalSigns.heartRate}
+                      onChange={(e) => setVitalSigns({ ...vitalSigns, heartRate: Number(e.target.value) })}
+                      className="w-full bg-white font-bold text-ink-900 px-2 py-1 rounded border border-line mt-1 text-body"
+                    />
+                  </div>
+                  <div className="rounded-lg border border-line p-2.5 bg-bg-soft">
+                    <label className="text-caption text-ink-500 block">Thân nhiệt (°C)</label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      value={vitalSigns.temperature}
+                      onChange={(e) => setVitalSigns({ ...vitalSigns, temperature: Number(e.target.value) })}
+                      className="w-full bg-white font-bold text-ink-900 px-2 py-1 rounded border border-line mt-1 text-body"
+                    />
+                  </div>
+                  <div className="rounded-lg border border-line p-2.5 bg-bg-soft">
+                    <label className="text-caption text-ink-500 block">SpO2 (%)</label>
+                    <input
+                      type="number"
+                      value={vitalSigns.spO2}
+                      onChange={(e) => setVitalSigns({ ...vitalSigns, spO2: Number(e.target.value) })}
+                      className="w-full bg-white font-bold text-ink-900 px-2 py-1 rounded border border-line mt-1 text-body"
+                    />
+                  </div>
+                  <div className="rounded-lg border border-line p-2.5 bg-bg-soft">
+                    <label className="text-caption text-ink-500 block">Cân nặng (kg)</label>
+                    <input
+                      type="number"
+                      step="0.5"
+                      value={vitalSigns.weight}
+                      onChange={(e) => setVitalSigns({ ...vitalSigns, weight: Number(e.target.value) })}
+                      className="w-full bg-white font-bold text-ink-900 px-2 py-1 rounded border border-line mt-1 text-body"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Row 3: Diagnostic Test Orders (Chỉ định cận lâm sàng) */}
+              <div className="rounded-xl border border-line bg-surface p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-bold text-ink-900 flex items-center gap-2 text-body">
+                    <ClipboardList size={16} className="text-primary-700" /> Chỉ định Cận lâm sàng &amp; Chẩn đoán hình ảnh
+                  </h3>
+                </div>
+
+                {/* Existing Diagnostic Orders */}
+                {diagnosticOrders.length > 0 && (
+                  <div className="space-y-2">
+                    {diagnosticOrders.map((order, idx) => (
+                      <div key={idx} className="flex items-center justify-between bg-bg-soft p-2.5 rounded-lg border border-line text-body">
+                        <div>
+                          <strong className="text-ink-900 block">{order.testName}</strong>
+                          <span className="text-caption text-ink-500">{order.department} · {order.resultSummary || "Đang chờ thực hiện"}</span>
+                        </div>
+                        <Badge tone={order.status === "COMPLETED" ? "success" : "warning"}>
+                          {order.status === "COMPLETED" ? "Đã có kết quả" : "Đã chỉ định"}
+                        </Badge>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Add new diagnostic test order */}
+                <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 pt-2 border-t border-line/60">
+                  <input
+                    type="text"
+                    placeholder="Tên xét nghiệm (vd: Điện tâm đồ ECG 12 chuyển đạo, Siêu âm tim Doppler...)"
+                    value={newTestName}
+                    onChange={(e) => setNewTestName(e.target.value)}
+                    className="sm:col-span-7 rounded-lg border border-line px-3 py-1.5 text-body"
+                  />
+                  <input
+                    type="text"
+                    placeholder="Khoa/Phòng thực hiện"
+                    value={newTestDept}
+                    onChange={(e) => setNewTestDept(e.target.value)}
+                    className="sm:col-span-3 rounded-lg border border-line px-3 py-1.5 text-body"
+                  />
+                  <Button size="sm" variant="outline" onClick={handleAddDiagnosticOrder} className="sm:col-span-2">
+                    <Plus size={14} className="mr-1" /> Thêm chỉ định
+                  </Button>
+                </div>
+              </div>
+
+              {/* Row 4: Prescription (Đơn thuốc) */}
+              <div className="rounded-xl border border-line bg-surface p-4 space-y-3">
+                <h3 className="font-bold text-ink-900 flex items-center gap-2 text-body">
+                  <Pill size={16} className="text-teal-700" /> Kê đơn thuốc điều trị
+                </h3>
+
+                {prescriptions.length > 0 && (
+                  <div className="space-y-2">
+                    {prescriptions.map((med, idx) => (
+                      <div key={idx} className="flex items-center justify-between bg-bg-soft p-2.5 rounded-lg border border-line text-body">
+                        <div>
+                          <strong className="text-ink-900">{med.medicineName}</strong>
+                          <span className="text-caption text-ink-600 ml-2 font-medium">({med.quantity})</span>
+                          <p className="text-caption text-ink-500">{med.dosage} · {med.usage}</p>
+                        </div>
+                        <button
+                          onClick={() => handleRemovePrescription(idx)}
+                          className="text-danger hover:bg-danger-soft p-1.5 rounded-lg transition-colors"
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Add new medication */}
+                <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 pt-2 border-t border-line/60">
+                  <input
+                    type="text"
+                    placeholder="Tên thuốc (vd: Amlodipine 5mg)"
+                    value={newMedName}
+                    onChange={(e) => setNewMedName(e.target.value)}
+                    className="sm:col-span-4 rounded-lg border border-line px-3 py-1.5 text-body"
+                  />
+                  <input
+                    type="text"
+                    placeholder="Liều lượng (vd: 1 viên/ngày)"
+                    value={newMedDosage}
+                    onChange={(e) => setNewMedDosage(e.target.value)}
+                    className="sm:col-span-3 rounded-lg border border-line px-3 py-1.5 text-body"
+                  />
+                  <input
+                    type="text"
+                    placeholder="Cách dùng (vd: Uống sáng sau ăn)"
+                    value={newMedUsage}
+                    onChange={(e) => setNewMedUsage(e.target.value)}
+                    className="sm:col-span-3 rounded-lg border border-line px-3 py-1.5 text-body"
+                  />
+                  <Button size="sm" variant="outline" onClick={handleAddPrescription} className="sm:col-span-2">
+                    <Plus size={14} className="mr-1" /> Thêm thuốc
+                  </Button>
+                </div>
+              </div>
+
+              {/* Row 5: Doctor's Clinical Findings & Conclusion */}
+              <div className="rounded-xl border border-line bg-surface p-4 space-y-2">
+                <h3 className="font-bold text-ink-900 flex items-center gap-2 text-body">
+                  <FileText size={16} className="text-primary-700" /> Kết luận Khám lâm sàng &amp; Lời dặn Bác sĩ
                 </h3>
                 <textarea
                   rows={4}
-                  className="mt-3 w-full rounded-xl border border-line p-3 text-body text-ink-900 focus:border-primary-500 focus:outline-none"
-                  placeholder="Nhập ghi chú lâm sàng, chỉ định xét nghiệm hoặc hướng điều trị cho bệnh nhân..."
                   value={doctorNoteInput}
                   onChange={(e) => setDoctorNoteInput(e.target.value)}
+                  placeholder="Nhập chẩn đoán xác định, tình trạng khám lâm sàng thực thể, kết quả cận lâm sàng và hướng dẫn tái khám..."
+                  className="w-full rounded-xl border border-line p-3 text-body text-ink-900 focus:border-primary-500 focus:outline-none"
                 />
-                <div className="mt-3 flex items-center justify-between">
-                  {saveSuccess ? (
-                    <span className="flex items-center gap-1.5 text-caption font-semibold text-success">
-                      <CheckCircle2 size={16} /> Đã lưu ghi chú thành công!
-                    </span>
-                  ) : (
-                    <span className="text-caption text-ink-500">Ghi chú lưu trực tiếp vào hồ sơ phiên khám mockup.</span>
-                  )}
-                  <Button size="sm" onClick={handleSaveNote}>
-                    Lưu ghi chú
-                  </Button>
-                </div>
-              </section>
+              </div>
             </div>
 
-            {/* Modal Footer */}
-            <div className="border-t border-line bg-bg-soft/50 p-4 text-right">
+            {/* Modal Footer Actions */}
+            <div className="sticky bottom-0 border-t border-line bg-bg-soft p-4 flex items-center justify-between">
               <Button variant="outline" onClick={() => setSelectedPatient(null)}>
                 Đóng
               </Button>
+              <div className="flex items-center gap-3">
+                <Button variant="outline" onClick={() => handleSaveConsultation("SAVE_DRAFT")}>
+                  Lưu bản nháp
+                </Button>
+                <Button variant="primary" onClick={() => handleSaveConsultation("COMPLETE")}>
+                  <CheckCircle2 size={16} className="mr-1.5" /> Hoàn thành khám &amp; Lưu hồ sơ bệnh án
+                </Button>
+              </div>
             </div>
           </div>
         </div>
