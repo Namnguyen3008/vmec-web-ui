@@ -1,8 +1,6 @@
 "use client";
 
 import { Fragment, useEffect, useState, useRef } from "react";
-import { MedicalDisclaimer } from "@/components/layout/MedicalDisclaimer";
-import { ProgressTracker } from "@/components/chat/ProgressTracker";
 import { UserBubble, AgentBubble, TypingDots, type CitationItem } from "@/components/chat/ChatBubbles";
 import { LivingContextSidebar } from "@/components/chat/LivingContextSidebar";
 import { ContextualQuickChips } from "@/components/chat/ContextualQuickChips";
@@ -28,7 +26,7 @@ import type { LivingClinicalContext } from "@/lib/ai/types";
 import { ApiError } from "@/lib/api/client";
 import { containsOfferSection, splitOfferSection } from "@/lib/chatContent";
 import type { AppointmentOffer, ChatActionType, ChatMessage, CheckoutContext } from "@/lib/api/contracts";
-import { HeartPulse, Stethoscope, Baby, Activity, Sparkles, RotateCcw, PanelRightOpen, X } from "lucide-react";
+import { RotateCcw, PanelRightOpen, X, Bot } from "lucide-react";
 
 interface UiMessage {
   id: string;
@@ -38,29 +36,6 @@ interface UiMessage {
   confidenceScore?: number;
   appointmentQr?: { appointmentId: string; appointmentCode: string | null };
 }
-
-const QUICK_PROMPTS = [
-  {
-    icon: <HeartPulse className="text-danger" size={16} />,
-    title: "Đau ngực trái",
-    text: "Tôi bị đau tức ngực trái khi leo cầu thang, kèm cảm giác hồi hộp kéo dài 2 ngày.",
-  },
-  {
-    icon: <Activity className="text-warning-800" size={16} />,
-    title: "Đau dạ dày / ợ chua",
-    text: "Tôi bị đau rát vùng thượng vị 3 ngày nay, ợ chua nhiều sau khi ăn đồ cay nóng.",
-  },
-  {
-    icon: <Baby className="text-primary-700" size={16} />,
-    title: "Khám Nhi khoa",
-    text: "Con tôi 4 tuổi bị sốt nhẹ 38.5°C kèm ho hắng hắt hơi 2 ngày nay.",
-  },
-  {
-    icon: <Stethoscope className="text-primary-600" size={16} />,
-    title: "Chóng mặt / Hoa mắt",
-    text: "Tôi hay bị hoa mắt chóng mặt khi đứng dậy đột ngột, thỉnh thoảng cảm giác quay cuồng.",
-  },
-];
 
 const CHAT_SESSION_LIFETIME_MS = 24 * 60 * 60 * 1000;
 
@@ -102,7 +77,7 @@ export default function ChatPage() {
   const [lastRawOfferText, setLastRawOfferText] = useState("");
   const [showMobileSidebar, setShowMobileSidebar] = useState(false);
 
-  // Living Clinical Context State (Powered by Working Memory)
+  // Living Clinical Context State
   const [livingContext, setLivingContext] = useState<LivingClinicalContext>(() =>
     getOrCreateLivingContext("default_session")
   );
@@ -328,30 +303,39 @@ export default function ChatPage() {
   }, [messages, offers, isSending, emergency, livingContext.suggestedChips]);
 
   return (
-    <div className="flex h-[calc(100vh-64px)] flex-col overflow-hidden bg-bg-soft/30">
-      <MedicalDisclaimer />
-
-      {/* Header bar */}
-      <div className="flex items-center justify-between border-b border-line bg-surface px-3 sm:px-5 py-2">
-        <div className="min-w-0 flex-1">
-          <ProgressTracker currentStep={currentStep} />
+    <div className="flex h-[calc(100vh-64px)] flex-col overflow-hidden bg-bg-soft/20">
+      {/* Ultra-compact Header Bar */}
+      <div className="flex items-center justify-between border-b border-line bg-surface px-4 py-2.5">
+        <div className="flex items-center gap-2.5">
+          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary-50 text-primary-700">
+            <Bot size={16} />
+          </div>
+          <div>
+            <h1 className="text-xs sm:text-sm font-bold text-ink-900 leading-none">
+              Trợ Lý Khám Bệnh AI (MedAgent)
+            </h1>
+            <p className="text-[10px] text-ink-500 mt-0.5">
+              Hội chẩn định tuyến & giữ chỗ khám theo chuẩn Bộ Y Tế
+            </p>
+          </div>
         </div>
+
         <div className="flex items-center gap-2">
           {/* Mobile Living Context Button */}
           <button
             type="button"
             onClick={() => setShowMobileSidebar(!showMobileSidebar)}
-            className="md:hidden flex items-center gap-1.5 rounded-lg border border-line bg-surface px-2.5 py-1.5 text-xs font-semibold text-primary-800"
+            className="md:hidden flex items-center gap-1.5 rounded-lg border border-line bg-surface px-2.5 py-1 text-xs font-semibold text-primary-800"
           >
             <PanelRightOpen size={14} />
-            <span>Tiến độ ({livingContext.progressPercentage}%)</span>
+            <span>Hồ sơ ({livingContext.progressPercentage}%)</span>
           </button>
 
           <Button
             type="button"
             variant="outline"
             size="sm"
-            icon={<RotateCcw size={15} />}
+            icon={<RotateCcw size={14} />}
             disabled={isSending || isRestoring}
             onClick={() => void resetChat()}
           >
@@ -362,57 +346,27 @@ export default function ChatPage() {
 
       {/* 2-Column Main Workspace */}
       <div className="flex flex-1 overflow-hidden">
-        {/* Left Column: Conversational Stream */}
+        {/* Left Column: Conversational Stream (Maximized Screen Area) */}
         <div className="flex flex-1 flex-col justify-between overflow-hidden">
-          <div className="flex-1 space-y-5 overflow-y-auto p-4 sm:p-6" aria-live="polite">
+          <div className="flex-1 space-y-4 overflow-y-auto p-4 sm:p-6" aria-live="polite">
             {messages.length === 0 && (
-              <div className="space-y-5">
-                <AgentBubble
-                  confidenceScore={98}
-                  citations={[
-                    {
-                      sourceId: "BYT_STANDARDS_2026",
-                      documentId: "VMEC-RAG-2026",
-                      label: "Hệ thống Tri thức Y tế & Định tuyến Triage Thông minh (Bộ Y Tế)",
-                      url: "https://kcb.vn",
-                      sectionTitle: "Quy chuẩn Định tuyến chuyên khoa & An toàn người bệnh VMEC 2026",
-                      confidence: 98,
-                      snippet: "Hệ thống AI được đối chiếu và kiểm chuẩn tự động dựa trên 2.670 vector nhúng y khoa và 1.536 quy tắc phân tầng cấp cứu.",
-                    },
-                  ]}
-                >
-                  Chào bạn! Tôi là **AI Trợ lý Khám bệnh Thông minh**. Hãy chia sẻ về triệu chứng hoặc sự khó chịu bạn đang gặp phải.
-                  Tôi sẽ cùng bạn làm rõ tình trạng, xoa dịu tâm lý và định hướng chuyên khoa chính xác nhất.
-                </AgentBubble>
-
-                {/* Quick Prompts Section */}
-                <div className="ml-0 sm:ml-12 rounded-card border border-line bg-surface p-4 sm:p-5 shadow-2xs">
-                  <p className="font-bold text-ink-900 text-body flex items-center gap-1.5 mb-3">
-                    <Sparkles size={16} className="text-primary-600 shrink-0" /> Chọn nhanh triệu chứng phổ biến để tư vấn:
-                  </p>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                    {QUICK_PROMPTS.map((prompt, idx) => (
-                      <button
-                        key={idx}
-                        onClick={() => handleSend(prompt.text)}
-                        className="flex items-center gap-3 rounded-xl border border-line p-3 text-left hover:border-primary-400 hover:bg-primary-50 transition-all group"
-                      >
-                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-bg-muted group-hover:bg-surface">
-                          {prompt.icon}
-                        </span>
-                        <div>
-                          <p className="font-bold text-ink-900 text-body-sm group-hover:text-primary-900">
-                            {prompt.title}
-                          </p>
-                          <p className="text-caption text-ink-500 line-clamp-1">
-                            {prompt.text}
-                          </p>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
+              <AgentBubble
+                confidenceScore={98}
+                citations={[
+                  {
+                    sourceId: "BYT_STANDARDS_2026",
+                    documentId: "VMEC-RAG-2026",
+                    label: "Hệ thống Tri thức Y tế & Định tuyến Triage Thông minh (Bộ Y Tế)",
+                    url: "https://kcb.vn",
+                    sectionTitle: "Quy chuẩn Định tuyến chuyên khoa & An toàn người bệnh VMEC 2026",
+                    confidence: 98,
+                    snippet: "Hệ thống AI được đối chiếu và kiểm chuẩn tự động dựa trên 2.670 vector nhúng y khoa và 1.536 quy tắc phân tầng cấp cứu.",
+                  },
+                ]}
+              >
+                Chào bạn! Tôi là **AI Trợ lý Khám bệnh Thông minh**. Hãy chia sẻ về triệu chứng hoặc sự khó chịu bạn đang gặp phải.
+                Tôi sẽ cùng bạn làm rõ tình trạng, xoa dịu tâm lý và định hướng chuyên khoa chính xác nhất.
+              </AgentBubble>
             )}
 
             {/* Message Feed */}
@@ -542,31 +496,33 @@ export default function ChatPage() {
           />
         </div>
 
-        {/* Right Column: Desktop Living Clinical Context Window */}
+        {/* Right Column: Compact Living Clinical Context Window with 4-step progress */}
         <LivingContextSidebar
           context={livingContext}
+          currentStep={currentStep}
           onForceComplete={handleForceComplete}
-          className="w-80 lg:w-96 shrink-0 hidden md:flex"
+          className="w-72 lg:w-80 shrink-0 hidden md:flex"
         />
       </div>
 
       {/* Mobile Drawer for Living Context */}
       {showMobileSidebar && (
         <div className="fixed inset-0 z-50 flex justify-end bg-black/50 backdrop-blur-xs md:hidden">
-          <div className="relative w-5/6 max-w-sm h-full bg-surface shadow-2xl flex flex-col">
-            <div className="flex items-center justify-between p-4 border-b border-line">
-              <h3 className="font-bold text-sm text-ink-900">Hồ Sơ Ngữ Cảnh Sống</h3>
+          <div className="relative w-5/6 max-w-xs h-full bg-surface shadow-2xl flex flex-col">
+            <div className="flex items-center justify-between p-3.5 border-b border-line">
+              <h3 className="font-bold text-xs text-ink-900">Hồ Sơ Ngữ Cảnh Sống</h3>
               <button
                 type="button"
                 onClick={() => setShowMobileSidebar(false)}
                 className="p-1 rounded-full text-ink-500 hover:bg-bg-muted"
               >
-                <X size={18} />
+                <X size={16} />
               </button>
             </div>
             <div className="flex-1 overflow-y-auto">
               <LivingContextSidebar
                 context={livingContext}
+                currentStep={currentStep}
                 onForceComplete={() => {
                   handleForceComplete();
                   setShowMobileSidebar(false);
