@@ -11,6 +11,7 @@ import {
   AlertTriangle,
   Flame,
   ArrowRight,
+  Sparkles,
 } from "lucide-react";
 
 interface LivingContextSidebarProps {
