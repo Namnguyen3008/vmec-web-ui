@@ -357,22 +357,8 @@ export default function ChatPage() {
         <div className="flex flex-1 flex-col justify-between overflow-hidden">
           <div className="flex-1 space-y-4 overflow-y-auto p-4 sm:p-6" aria-live="polite">
             {messages.length === 0 && (
-              <AgentBubble
-                confidenceScore={98}
-                citations={[
-                  {
-                    sourceId: "BYT_STANDARDS_2026",
-                    documentId: "VMEC-RAG-2026",
-                    label: "Hệ thống Tri thức Y tế & Định tuyến Triage Thông minh (Bộ Y Tế)",
-                    url: "https://kcb.vn",
-                    sectionTitle: "Quy chuẩn Định tuyến chuyên khoa & An toàn người bệnh VMEC 2026",
-                    confidence: 98,
-                    snippet: "Hệ thống AI được đối chiếu và kiểm chuẩn tự động dựa trên 2.670 vector nhúng y khoa và 1.536 quy tắc phân tầng cấp cứu.",
-                  },
-                ]}
-              >
-                Chào bạn! Tôi là **AI Trợ lý Khám bệnh Thông minh**. Hãy chia sẻ về triệu chứng hoặc sự khó chịu bạn đang gặp phải.
-                Tôi sẽ cùng bạn làm rõ tình trạng, xoa dịu tâm lý và định hướng chuyên khoa chính xác nhất.
+              <AgentBubble>
+                Chào bạn! Tôi là **AI Trợ lý Khám bệnh Thông minh**. Hãy chia sẻ về triệu chứng hoặc sự khó chịu bạn đang gặp phải. Tôi sẽ cùng bạn lắng nghe, làm rõ tình trạng và định hướng chuyên khoa chính xác nhất.
               </AgentBubble>
             )}
 
