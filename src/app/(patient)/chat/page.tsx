@@ -324,18 +324,23 @@ export default function ChatPage() {
               Hội chẩn định tuyến & giữ chỗ khám theo chuẩn Bộ Y Tế
             </p>
           </div>
+          {/* AgentObservabilityButton temporarily hidden per user request */}
+          {/*
           <AgentObservabilityButton
             context={livingContext}
             messages={messages}
             className="ml-3 hidden sm:flex"
           />
+          */}
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Mobile Observability Button */}
+          {/* Mobile Observability Button temporarily hidden */}
+          {/*
           <div className="sm:hidden">
             <AgentObservabilityButton context={livingContext} messages={messages} />
           </div>
+          */}
 
           {/* Mobile Living Context Button */}
           <button
@@ -344,7 +349,7 @@ export default function ChatPage() {
             className="md:hidden flex items-center gap-1.5 rounded-lg border border-line bg-surface px-2.5 py-1 text-xs font-semibold text-primary-800"
           >
             <PanelRightOpen size={14} />
-            <span>Hồ sơ ({livingContext.progressPercentage}%)</span>
+            <span>Quy trình ({currentStep}/4)</span>
           </button>
 
           <Button
