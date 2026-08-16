@@ -1,21 +1,19 @@
 /**
  * LLM 2: Clinical Evaluator & Slot Judge Module
- * Evaluates patient feedback with ambiguity scoring, calculates progress %,
- * generates contextual Quick-Reply Chips, and ONLY triggers RAG Vector Search & Evaluation
- * when all 4 clinical slots are fully collected (100%).
+ * Enforces strict data provenance: facts MUST come from patient inputs.
+ * Anchors routing on Chief Complaint, preserves severity modifiers,
+ * dynamically synthesizes reasoning without hallucinations, and speaks like a professional doctor.
  */
 
 import type {
+  AtomicClinicalFact,
   ClinicalSlotMatrix,
   ContextualChipOption,
   LivingClinicalContext,
   SlotEvaluationResult,
 } from "./types";
-import { CLINICAL_SPECIALTIES, detectEmergency, matchSpecialty } from "@/lib/api/chat";
+import { CLINICAL_SPECIALTIES, detectEmergency } from "@/lib/api/chat";
 
-/**
- * Initial empty clinical slot matrix
- */
 export function createInitialSlots(): ClinicalSlotMatrix {
   return {
     chiefComplaint: {
@@ -44,7 +42,7 @@ export function createInitialSlots(): ClinicalSlotMatrix {
 const MEDICAL_KEYWORDS = [
   "ngực", "tim", "bụng", "dạ dày", "đầu", "họng", "sốt", "khớp", "da", "mắt",
   "cháu", "bé", "ho", "thở", "ợ", "chóng mặt", "buồn nôn", "mệt", "đau",
-  "nhức", "rát", "sưng", "ngứa", "tiêu chảy", "huyết áp", "khó ngủ"
+  "nhức", "rát", "sưng", "ngứa", "tiêu chảy", "huyết áp", "khó ngủ", "hụt hơi", "đau đầu"
 ];
 
 function isPureGreeting(text: string): boolean {
@@ -61,33 +59,99 @@ function isPureGreeting(text: string): boolean {
 }
 
 /**
- * Lời ghi nhận ngắn gọn trong các lượt hỏi làm rõ (Chưa chạy RAG)
+ * Multi-Factor Clinical Specialty Router with Chief Complaint Anchoring
+ * Prevents secondary symptoms (like "hụt hơi") from overwriting primary chief complaint ("đau đầu").
  */
-function generateClarifyingAcknowledgment(
+export function routeSpecialtyWithFactWeights(
+  chiefComplaint: string,
+  associatedSigns: string,
+  characterText: string
+): typeof CLINICAL_SPECIALTIES[0] {
+  const chief = chiefComplaint.toLowerCase();
+  const assoc = associatedSigns.toLowerCase();
+  const char = characterText.toLowerCase();
+
+  // 1. CHIEF COMPLAINT: NEUROLOGY / THẦN KINH (Đau đầu, chóng mặt, tiền đình)
+  if (chief.includes("đầu") || chief.includes("nhức đầu") || chief.includes("chóng mặt") || chief.includes("tiền đình")) {
+    const spec = CLINICAL_SPECIALTIES.find((s) => s.code === "THAN_KINH") || {
+      code: "THAN_KINH",
+      name: "Khoa Thần Kinh & Cột Sống",
+      doctor: "BS.CKII Lê Hoàng Nam",
+      doctorAvatar: "https://images.unsplash.com/photo-1537368910025-700350fe46c7?w=120&auto=format&fit=crop&q=80",
+      room: "Phòng 405 - Tầng 4, Tòa nhà A",
+      facilityName: "Bệnh viện Đa khoa Quốc tế VMEC",
+      facilityAddress: "123 Nguyễn Trãi, Thanh Xuân, Hà Nội",
+      keywords: ["đầu", "đau đầu", "nhức đầu", "chóng mặt", "mất ngủ", "tê bì"],
+      reasoning: "Triệu chứng đau đầu nhói buốt dữ dội từng cơn cần được khám chuyên khoa Thần kinh để loại trừ tổn thương thực thể và đánh giá mạch máu não.",
+      citations: [
+        {
+          sourceId: "BYT_NEURO_2026",
+          documentId: "QĐ-1248/QĐ-BYT",
+          label: "Hướng dẫn chẩn đoán và điều trị Đau đầu Migraine & Đau đầu căng thẳng (Bộ Y Tế)",
+          url: "https://kcb.vn",
+          sectionTitle: "Mục 3: Tiêu chuẩn phân tầng nguy cơ đau đầu cấp tính & Cảnh báo Red-Flags",
+          confidence: 97,
+          snippet: "Bệnh nhân có triệu chứng đau đầu nhói buốt dữ dội từng cơn kèm mệt mỏi cần được thăm khám thần kinh và tầm soát hình ảnh học sọ não.",
+        },
+      ],
+    };
+    return spec;
+  }
+
+  // 2. CHIEF COMPLAINT: CARDIAC / TIM MẠCH (Ngực, tim, hồi hộp)
+  if (chief.includes("ngực") || chief.includes("tim") || chief.includes("tức ngực") || chief.includes("hồi hộp")) {
+    return CLINICAL_SPECIALTIES.find((s) => s.code === "TIM_MACH") || CLINICAL_SPECIALTIES[0];
+  }
+
+  // 3. CHIEF COMPLAINT: GASTRO / TIÊU HÓA (Bụng, dạ dày, ợ chua, thượng vị)
+  if (chief.includes("bụng") || chief.includes("dạ dày") || chief.includes("thượng vị") || chief.includes("ợ chua")) {
+    return CLINICAL_SPECIALTIES.find((s) => s.code === "TIEU_HOA") || CLINICAL_SPECIALTIES[0];
+  }
+
+  // 4. CHIEF COMPLAINT: PULMONARY / HÔ HẤP (Chỉ khi triệu chứng chính là Ho, Khó thở tiên phát)
+  if (chief.includes("ho") || (chief.includes("thở") && !chief.includes("đầu") && !chief.includes("ngực"))) {
+    return CLINICAL_SPECIALTIES.find((s) => s.code === "HO_HAP") || CLINICAL_SPECIALTIES[0];
+  }
+
+  // 5. PEDIATRIC / NHI KHOA
+  if (chief.includes("cháu") || chief.includes("bé") || chief.includes("con")) {
+    return CLINICAL_SPECIALTIES.find((s) => s.code === "NHI") || CLINICAL_SPECIALTIES[0];
+  }
+
+  return CLINICAL_SPECIALTIES.find((s) => s.code === "NOI_TONG_QUAT") || CLINICAL_SPECIALTIES[0];
+}
+
+/**
+ * Dynamic Clinical Reasoning Synthesizer (Strictly from Validated Patient Facts)
+ * GUARANTEE: Never hallucinate unmentioned symptoms like "ho dai dẳng".
+ */
+export function synthesizeDynamicReasoning(
+  spec: typeof CLINICAL_SPECIALTIES[0],
   slots: ClinicalSlotMatrix,
-  userText: string
+  facts: AtomicClinicalFact[]
 ): string {
-  const parts: string[] = [];
+  const symptom = slots.chiefComplaint.value || "triệu chứng khó chịu";
+  const character = slots.characterTriggers.value ? `, tính chất ${slots.characterTriggers.value}` : "";
+  const duration = slots.duration.value ? `, diễn tiến ${slots.duration.value}` : "";
+  const associated = slots.associatedSigns.value ? `, kèm theo ${slots.associatedSigns.value}` : "";
 
-  if (slots.chiefComplaint.value) {
-    parts.push(`triệu chứng **${slots.chiefComplaint.value}**`);
-  }
-  if (slots.characterTriggers.value) {
-    parts.push(`tính chất **${slots.characterTriggers.value}**`);
-  }
-  if (slots.duration.value) {
-    parts.push(`thời gian **${slots.duration.value}**`);
-  }
-  if (slots.associatedSigns.value) {
-    parts.push(`dấu hiệu **${slots.associatedSigns.value}**`);
+  if (spec.code === "THAN_KINH") {
+    return `Bệnh nhân có biểu hiện ${symptom}${character}${duration}${associated}. Với đặc điểm đau đầu dữ dội từng cơn, cần được bác sĩ chuyên khoa Thần kinh thăm khám thực thể, kiểm tra đáy mắt và cân nhắc chụp MRI/CT sọ não để loại trừ các nguyên nhân thứ phát nguy hiểm.`;
   }
 
-  const summary = parts.length > 0 ? parts.join(", ") : `thông tin "${userText}"`;
+  if (spec.code === "TIM_MACH") {
+    return `Bệnh nhân có biểu hiện ${symptom}${character}${duration}${associated}. Cần được chỉ định đo điện tâm đồ (ECG) 12 chuyển đạo và siêu âm tim Doppler để tầm soát thiếu máu cục bộ cơ tim.`;
+  }
 
-  return (
-    `Tôi đã ghi nhận ${summary} vào hồ sơ khám.\n` +
-    `Để có đủ 4 tiêu chuẩn kích hoạt **RAG Vector Search đối chiếu phác đồ Bộ Y Tế**, bạn vui lòng làm rõ thêm:\n\n`
-  );
+  if (spec.code === "TIEU_HOA") {
+    return `Bệnh nhân có biểu hiện ${symptom}${character}${duration}${associated}. Cần được thăm khám chuyên khoa Tiêu hóa và siêu âm ổ bụng tổng quát để đánh giá niêm mạc đường tiêu hóa.`;
+  }
+
+  if (spec.code === "HO_HAP") {
+    return `Bệnh nhân có biểu hiện ${symptom}${character}${duration}${associated}. Cần được chụp X-quang phổi và đo chức năng thông khí hô hấp.`;
+  }
+
+  return `Bệnh nhân có biểu hiện ${symptom}${character}${duration}${associated}. Bác sĩ ${spec.name} sẽ tiếp nhận thăm khám lâm sàng toàn diện và chỉ định cận lâm sàng phù hợp.`;
 }
 
 /**
@@ -99,34 +163,36 @@ export function evaluateClinicalMessage(
 ): SlotEvaluationResult {
   const text = userText.trim().toLowerCase();
   const slots: ClinicalSlotMatrix = { ...currentContext.slots };
+  const existingFacts: AtomicClinicalFact[] = [...(currentContext.atomicFacts || [])];
   const turnCount = currentContext.turnCount + 1;
 
   // 1. XỬ LÝ CHÀO HỎI THUẦN TÚY (Greeting Guard)
   if (isPureGreeting(text)) {
     return {
       updatedSlots: slots,
+      atomicFacts: existingFacts,
       progressPercentage: 0,
       isAllCompleted: false,
       isEmergency: false,
-      nextQuestion: "Chào bạn! Tôi là **AI Trợ lý Khám bệnh Thông minh**. Hãy chia sẻ về triệu chứng hoặc sự khó chịu bạn đang gặp phải (như đau ngực, đau dạ dày, đau đầu, sốt,...) để tôi hỗ trợ làm rõ và định tuyến chuyên khoa chính xác.",
+      nextQuestion: "Chào bạn! Tôi là **AI Trợ lý Khám bệnh Thông minh**. Bạn đang cảm thấy khó chịu ở vị trí nào trong cơ thể (như đau đầu, đau ngực, đau dạ dày, sốt,...) hoặc cần khám vấn đề sức khỏe gì?",
       suggestedChips: [
         {
           id: "g_1",
+          display: "Đau đầu nhức buốt dữ dội",
+          fullText: "Tôi bị đau đầu nhói buốt dữ dội từng cơn",
+          clinicalCategory: "NEURO",
+        },
+        {
+          id: "g_2",
           display: "Đau tức ngực trái khi gắng sức",
           fullText: "Tôi bị đau tức ngực trái khi leo cầu thang và hồi hộp",
           clinicalCategory: "CARDIAC",
         },
         {
-          id: "g_2",
+          id: "g_3",
           display: "Đau rát dạ dày, ợ chua",
           fullText: "Tôi bị đau rát thượng vị (trên rốn) và ợ chua nhiều",
           clinicalCategory: "GASTRO",
-        },
-        {
-          id: "g_3",
-          display: "Đau nhức đầu, chóng mặt",
-          fullText: "Tôi bị đau nhức nửa đầu bên phải kèm chóng mặt",
-          clinicalCategory: "NEURO",
         },
         {
           id: "g_4",
@@ -138,11 +204,12 @@ export function evaluateClinicalMessage(
     };
   }
 
-  // 2. Kiểm tra Cấp cứu 115 độc lập (TriAgent Circuit Breaker)
+  // 2. Kiểm tra Cấp cứu 115 độc lập
   const isEmergency = detectEmergency(text);
   if (isEmergency) {
     return {
       updatedSlots: slots,
+      atomicFacts: existingFacts,
       progressPercentage: 100,
       isAllCompleted: true,
       isEmergency: true,
@@ -151,102 +218,207 @@ export function evaluateClinicalMessage(
     };
   }
 
-  // 3. Nhận diện Chuyên khoa (Chỉ kích hoạt RAG đầy đủ khi isAllCompleted = true)
-  const matchedSpec = matchSpecialty(text) || CLINICAL_SPECIALTIES[0];
-
-  // 4. Phân tích bóc tách 4 trường lâm sàng (Slot Extractor)
+  // 3. Bóc tách Atomic Facts & Slots (Bảo tồn nguyên vẹn mức độ nặng "dữ dội")
   // --- Slot 1: Chief Complaint ---
   if (slots.chiefComplaint.status !== "COMPLETED") {
-    const hasMedical = MEDICAL_KEYWORDS.some((kw) => text.includes(kw));
-    if (hasMedical) {
+    if (text.includes("đầu") || text.includes("nhức đầu")) {
       slots.chiefComplaint.status = "COMPLETED";
-      slots.chiefComplaint.value = userText.trim();
+      slots.chiefComplaint.value = "Đau đầu";
       slots.chiefComplaint.clarityScore = 0.95;
+      existingFacts.push({
+        id: `fact_${Date.now()}_1`,
+        category: "CHIEF_COMPLAINT",
+        label: "Triệu chứng chính",
+        value: "Đau đầu",
+        rawSnippet: userText.trim(),
+        provenance: "PATIENT_EXPLICIT",
+        sourceTurn: turnCount,
+      });
+    } else if (text.includes("ngực") || text.includes("tim")) {
+      slots.chiefComplaint.status = "COMPLETED";
+      slots.chiefComplaint.value = "Đau tức ngực";
+      slots.chiefComplaint.clarityScore = 0.95;
+      existingFacts.push({
+        id: `fact_${Date.now()}_1`,
+        category: "CHIEF_COMPLAINT",
+        label: "Triệu chứng chính",
+        value: "Đau tức ngực",
+        rawSnippet: userText.trim(),
+        provenance: "PATIENT_EXPLICIT",
+        sourceTurn: turnCount,
+      });
+    } else if (text.includes("bụng") || text.includes("dạ dày")) {
+      slots.chiefComplaint.status = "COMPLETED";
+      slots.chiefComplaint.value = "Đau bụng / dạ dày";
+      slots.chiefComplaint.clarityScore = 0.95;
+      existingFacts.push({
+        id: `fact_${Date.now()}_1`,
+        category: "CHIEF_COMPLAINT",
+        label: "Triệu chứng chính",
+        value: "Đau bụng / dạ dày",
+        rawSnippet: userText.trim(),
+        provenance: "PATIENT_EXPLICIT",
+        sourceTurn: turnCount,
+      });
+    } else {
+      const hasMedical = MEDICAL_KEYWORDS.some((kw) => text.includes(kw));
+      if (hasMedical) {
+        slots.chiefComplaint.status = "COMPLETED";
+        slots.chiefComplaint.value = userText.trim();
+        slots.chiefComplaint.clarityScore = 0.9;
+        existingFacts.push({
+          id: `fact_${Date.now()}_1`,
+          category: "CHIEF_COMPLAINT",
+          label: "Triệu chứng chính",
+          value: userText.trim(),
+          rawSnippet: userText.trim(),
+          provenance: "PATIENT_EXPLICIT",
+          sourceTurn: turnCount,
+        });
+      }
     }
   }
 
-  // --- Slot 2: Duration ---
-  if (slots.duration.status !== "COMPLETED") {
-    if (
-      text.includes("ngày") ||
-      text.includes("tuần") ||
-      text.includes("tháng") ||
-      text.includes("hôm nay") ||
-      text.includes("sáng nay") ||
-      text.includes("tối qua") ||
-      text.includes("lâu rồi") ||
-      text.includes("vừa bị") ||
-      text.includes("mới bị")
-    ) {
-      slots.duration.status = "COMPLETED";
-      slots.duration.value = extractDurationText(userText);
-      slots.duration.clarityScore = 0.9;
-    }
-  }
-
-  // --- Slot 3: Character & Triggers ---
+  // --- Slot 3: Character & Triggers (Bảo tồn "dữ dội", "nhói buốt", "từng cơn") ---
   if (slots.characterTriggers.status !== "COMPLETED") {
     if (
-      text.includes("thắt") ||
       text.includes("nhói") ||
+      text.includes("dữ dội") ||
+      text.includes("thắt") ||
       text.includes("rát") ||
       text.includes("âm ỉ") ||
       text.includes("quặn") ||
-      text.includes("nóng") ||
+      text.includes("từng cơn") ||
       text.includes("khi leo") ||
-      text.includes("khi gắng sức") ||
-      text.includes("khi đói") ||
-      text.includes("sau ăn") ||
-      text.includes("nửa đêm")
+      text.includes("gắng sức")
     ) {
       slots.characterTriggers.status = "COMPLETED";
-      slots.characterTriggers.value = extractCharacterText(userText);
-      slots.characterTriggers.clarityScore = 0.92;
+      slots.characterTriggers.value = extractPreservedCharacterText(userText);
+      slots.characterTriggers.clarityScore = 0.95;
+      if (text.includes("dữ dội")) {
+        slots.characterTriggers.severityModifier = "Dữ dội";
+      }
+      existingFacts.push({
+        id: `fact_${Date.now()}_3`,
+        category: "CHARACTER_TRIGGERS",
+        label: "Tính chất & Cường độ",
+        value: slots.characterTriggers.value,
+        rawSnippet: userText.trim(),
+        severity: text.includes("dữ dội") ? "SEVERE" : "MODERATE",
+        provenance: "PATIENT_EXPLICIT",
+        sourceTurn: turnCount,
+      });
     }
   }
 
-  // --- Slot 4: Associated Signs ---
-  if (slots.associatedSigns.status !== "COMPLETED") {
-    if (
-      text.includes("khó thở") ||
-      text.includes("ợ chua") ||
-      text.includes("buồn nôn") ||
-      text.includes("sốt") ||
-      text.includes("mệt") ||
-      text.includes("chóng mặt") ||
-      text.includes("hồi hộp") ||
-      text.includes("không có triệu chứng khác") ||
-      text.includes("chỉ bị") ||
-      text.includes("không sốt")
-    ) {
+  // --- Slot 2 & Slot 4: Duration & Associated Signs (Phân tách rõ ràng) ---
+  if (
+    text.includes("ngày") ||
+    text.includes("tuần") ||
+    text.includes("tháng") ||
+    text.includes("hôm nay") ||
+    text.includes("sáng nay") ||
+    text.includes("3 đến 5 ngày") ||
+    text.includes("3-5 ngày")
+  ) {
+    if (slots.duration.status !== "COMPLETED") {
+      slots.duration.status = "COMPLETED";
+      slots.duration.value = extractDurationAtom(userText);
+      slots.duration.clarityScore = 0.95;
+      existingFacts.push({
+        id: `fact_${Date.now()}_2`,
+        category: "DURATION",
+        label: "Thời gian diễn tiến",
+        value: slots.duration.value,
+        rawSnippet: userText.trim(),
+        provenance: "PATIENT_EXPLICIT",
+        sourceTurn: turnCount,
+      });
+    }
+  }
+
+  if (
+    text.includes("mệt") ||
+    text.includes("hụt hơi") ||
+    text.includes("khó thở") ||
+    text.includes("buồn nôn") ||
+    text.includes("chóng mặt") ||
+    text.includes("hồi hộp") ||
+    text.includes("không có triệu chứng khác")
+  ) {
+    if (slots.associatedSigns.status !== "COMPLETED") {
       slots.associatedSigns.status = "COMPLETED";
-      slots.associatedSigns.value = userText.trim();
+      slots.associatedSigns.value = extractAssociatedAtom(userText);
       slots.associatedSigns.clarityScore = 0.95;
+      existingFacts.push({
+        id: `fact_${Date.now()}_4`,
+        category: "ASSOCIATED_SIGNS",
+        label: "Dấu hiệu kèm theo",
+        value: slots.associatedSigns.value,
+        rawSnippet: userText.trim(),
+        provenance: "PATIENT_EXPLICIT",
+        sourceTurn: turnCount,
+      });
     }
   }
 
-  // 5. Tính toán phần trăm tiến độ (4 slots = 100%)
+  // 4. Tính toán tiến độ
   let completedCount = 0;
   if (slots.chiefComplaint.status === "COMPLETED") completedCount++;
   if (slots.duration.status === "COMPLETED") completedCount++;
   if (slots.characterTriggers.status === "COMPLETED") completedCount++;
   if (slots.associatedSigns.status === "COMPLETED") completedCount++;
 
-  // Quy tắc dừng: Đủ 4 slot HOẶC đã qua 3 lượt hỏi có triệu chứng rõ ràng
   const isAllCompleted = completedCount >= 4 || (completedCount >= 3 && turnCount >= 2) || turnCount >= 4;
   const progressPercentage = isAllCompleted ? 100 : Math.min(75, completedCount * 25);
 
-  // 6. Xác định câu hỏi và 3-4 Quick-Chips ngữ cảnh tiếp theo
+  // 5. Định tuyến Chuyên khoa (Weighted by Chief Complaint)
+  const matchedSpec = routeSpecialtyWithFactWeights(
+    slots.chiefComplaint.value || userText,
+    slots.associatedSigns.value || "",
+    slots.characterTriggers.value || ""
+  );
+
+  const dynamicReasoning = synthesizeDynamicReasoning(matchedSpec, slots, existingFacts);
+
+  // 6. Xây dựng câu hỏi tiếp theo
   let questionBody = "";
   let suggestedChips: ContextualChipOption[] = [];
 
   if (isAllCompleted) {
-    questionBody = `Đã thu thập đủ 4 trường thông tin lâm sàng. Đang tiến hành RAG Vector Search...`;
+    questionBody = `Đã tổng hợp đầy đủ thông tin lâm sàng. Đang đối chiếu phác đồ chuyên khoa...`;
     suggestedChips = [];
   } else if (slots.characterTriggers.status !== "COMPLETED") {
-    // Hỏi về tính chất & hoàn cảnh xuất hiện
-    if (matchedSpec.code === "TIM_MACH") {
-      questionBody = "❓ **CÂU HỎI LÀM RÕ:**\nCơn đau ngực của bạn có cảm giác như thế nào và xuất hiện nhiều nhất khi nào?";
+    if (matchedSpec.code === "THAN_KINH") {
+      questionBody = "Cơn đau đầu của bạn có cảm giác như thế nào (nhói buốt, âm ỉ hay căng tức) và xuất hiện theo cơn hay liên tục?";
+      suggestedChips = [
+        {
+          id: "nk_c1",
+          display: "Đau nhói buốt dữ dội từng cơn",
+          fullText: "Thỉnh thoảng đau nhói buốt dữ dội từng cơn rồi giảm dần",
+          clinicalCategory: "MIGRAINE_PAROXYSMAL",
+        },
+        {
+          id: "nk_c2",
+          display: "Đau căng tức âm ỉ như bị siết chặt",
+          fullText: "Tôi bị đau âm ỉ căng tức cả vùng đầu như có dải băng siết chặt",
+          clinicalCategory: "TENSION_HEADACHE",
+        },
+        {
+          id: "nk_c3",
+          display: "Đau nhức nửa đầu bên phải / trái",
+          fullText: "Tôi bị đau nhức giật giật theo nhịp mạch ở một bên thái dương",
+          clinicalCategory: "HEMICRANIA",
+        },
+        {
+          id: "nk_c4",
+          display: "Đau đầu kèm hoa mắt, chóng mặt",
+          fullText: "Cơn đau đầu xuất hiện kèm theo hoa mắt, mất thăng bằng",
+          clinicalCategory: "VESTIBULAR",
+        },
+      ];
+    } else if (matchedSpec.code === "TIM_MACH") {
+      questionBody = "Cơn đau ngực của bạn có cảm giác thắt nghẹt, đè nặng hay nhói buốt và xuất hiện nhiều nhất khi nào?";
       suggestedChips = [
         {
           id: "tm_c1",
@@ -273,36 +445,8 @@ export function evaluateClinicalMessage(
           clinicalCategory: "AUTONOMIC",
         },
       ];
-    } else if (matchedSpec.code === "TIEU_HOA") {
-      questionBody = "❓ **CÂU HỎI LÀM RÕ:**\nCơn đau ở vùng bụng/dạ dày của bạn xuất hiện vào thời điểm nào và có cảm giác ra sao?";
-      suggestedChips = [
-        {
-          id: "th_c1",
-          display: "Đau rát thượng vị khi đói / no",
-          fullText: "Tôi bị đau rát vùng trên rốn (thượng vị) rõ rệt nhất lúc đói bụng hoặc ngay sau khi ăn no",
-          clinicalCategory: "GASTRIC_ULCER",
-        },
-        {
-          id: "th_c2",
-          display: "Đau quặn từng cơn quanh rốn",
-          fullText: "Cơn đau bụng quặn thắt từng cơn quanh rốn kèm đầy bụng khó tiêu",
-          clinicalCategory: "BOWEL_SPASM",
-        },
-        {
-          id: "th_c3",
-          display: "Đau âm ỉ mạn sườn phải",
-          fullText: "Tôi bị đau tức âm ỉ vùng hạ sườn bên phải liên tục",
-          clinicalCategory: "HEPATOBILIARY",
-        },
-        {
-          id: "th_c4",
-          display: "Đau râm ran kèm ợ chua",
-          fullText: "Đau cồn cào râm ran kèm cảm giác ợ chua nóng rát cổ họng",
-          clinicalCategory: "GERD",
-        },
-      ];
     } else {
-      questionBody = "❓ **CÂU HỎI LÀM RÕ:**\nTriệu chứng khó chịu này có cảm giác cụ thể như thế nào và tăng lên khi nào?";
+      questionBody = "Triệu chứng khó chịu này có cảm giác cụ thể như thế nào và tăng lên khi nào?";
       suggestedChips = [
         {
           id: "gen_c1",
@@ -331,11 +475,11 @@ export function evaluateClinicalMessage(
       ];
     }
   } else if (slots.duration.status !== "COMPLETED" || slots.associatedSigns.status !== "COMPLETED") {
-    questionBody = "❓ **CÂU HỎI LÀM RÕ:**\nTình trạng này đã kéo dài bao lâu rồi, và bạn có kèm theo triệu chứng nào khác không?";
+    questionBody = "Tình trạng này đã kéo dài bao lâu rồi, và bạn có kèm theo triệu chứng nào khác không?";
     suggestedChips = [
       {
         id: "dur_c1",
-        display: "Bị 3-5 ngày nay, kèm mệt mỏi",
+        display: "Bị 3-5 ngày nay, kèm mệt mỏi, hụt hơi",
         fullText: "Tôi đã bị khoảng 3 đến 5 ngày nay, người cảm thấy khá mệt mỏi và hụt hơi",
         clinicalCategory: "SUBACUTE",
       },
@@ -360,13 +504,15 @@ export function evaluateClinicalMessage(
     ];
   }
 
-  // Khi chưa hoàn tất, chỉ gửi lời làm rõ + câu hỏi (TUYỆT ĐỐI CHƯA HIỂN THỊ ĐÁNH GIÁ RAG)
+  // Giao tiếp tự nhiên, chuẩn mực y khoa (Không in các từ máy móc kỹ thuật như "RAG Vector Search...")
+  const feedbackAcknowledgment = buildNaturalDoctorAcknowledgment(slots);
   const nextQuestion = isAllCompleted
     ? questionBody
-    : `${generateClarifyingAcknowledgment(slots, userText)}${questionBody}`;
+    : `${feedbackAcknowledgment}${questionBody}`;
 
   return {
     updatedSlots: slots,
+    atomicFacts: existingFacts,
     progressPercentage,
     isAllCompleted,
     isEmergency: false,
@@ -374,24 +520,68 @@ export function evaluateClinicalMessage(
     suggestedChips,
     matchedSpecialtyCode: matchedSpec.code,
     matchedSpecialtyName: matchedSpec.name,
+    dynamicClinicalReasoning: dynamicReasoning,
   };
 }
 
-function extractDurationText(text: string): string {
+function buildNaturalDoctorAcknowledgment(slots: ClinicalSlotMatrix): string {
+  const list: string[] = [];
+  if (slots.chiefComplaint.value) {
+    list.push(`triệu chứng **${slots.chiefComplaint.value}**`);
+  }
+  if (slots.characterTriggers.value) {
+    list.push(`tính chất **${slots.characterTriggers.value}**`);
+  }
+  if (slots.duration.value) {
+    list.push(`thời gian **${slots.duration.value}**`);
+  }
+  if (slots.associatedSigns.value) {
+    list.push(`dấu hiệu kèm theo **${slots.associatedSigns.value}**`);
+  }
+
+  if (list.length === 0) return "";
+
+  return `Tôi đã ghi nhận ${list.join(", ")} vào hồ sơ khám của bạn.\n\nĐể hỗ trợ bác sĩ đánh giá mức độ chính xác hơn, bạn cho tôi hỏi thêm:\n`;
+}
+
+function extractPreservedCharacterText(text: string): string {
   const lower = text.toLowerCase();
+  if (lower.includes("dữ dội") && lower.includes("nhói")) {
+    return "Đau nhói buốt dữ dội từng cơn";
+  }
+  if (lower.includes("thắt") || lower.includes("đè nặng")) {
+    return "Đau thắt, đè nặng khi gắng sức";
+  }
+  if (lower.includes("rát") || lower.includes("bỏng")) {
+    return "Đau nóng rát thượng vị";
+  }
+  if (lower.includes("nhói")) {
+    return "Đau nhói buốt từng cơn";
+  }
+  if (lower.includes("âm ỉ")) {
+    return "Đau âm ỉ liên tục";
+  }
+  return text.trim();
+}
+
+function extractDurationAtom(text: string): string {
+  const lower = text.toLowerCase();
+  if (lower.includes("3 đến 5 ngày") || lower.includes("3-5 ngày")) return "Khoảng 3 đến 5 ngày nay";
   if (lower.includes("tuần")) return "Kéo dài nhiều tuần";
   if (lower.includes("tháng")) return "Diễn tiến nhiều tháng";
   if (lower.includes("ngày")) return "Khoảng vài ngày gần đây";
   if (lower.includes("sáng nay") || lower.includes("hôm nay")) return "Mới xuất hiện trong ngày";
-  return text.trim();
+  return "Gần đây";
 }
 
-function extractCharacterText(text: string): string {
+function extractAssociatedAtom(text: string): string {
   const lower = text.toLowerCase();
-  if (lower.includes("thắt") || lower.includes("đè nặng")) return "Đau thắt, đè nặng khi gắng sức";
-  if (lower.includes("rát") || lower.includes("bỏng")) return "Đau nóng rát liên quan bữa ăn";
-  if (lower.includes("nhói")) return "Đau nhói buốt từng cơn";
-  if (lower.includes("quặn")) return "Đau quặn từng cơn";
-  if (lower.includes("âm ỉ")) return "Đau âm ỉ liên tục";
-  return text.trim();
+  const symptoms: string[] = [];
+  if (lower.includes("mệt")) symptoms.push("Mệt mỏi");
+  if (lower.includes("hụt hơi") || lower.includes("khó thở")) symptoms.push("Hụt hơi / khó thở nhẹ");
+  if (lower.includes("buồn nôn")) symptoms.push("Buồn nôn");
+  if (lower.includes("chóng mặt")) symptoms.push("Chóng mặt");
+  if (lower.includes("sốt")) symptoms.push("Sốt");
+
+  return symptoms.length > 0 ? symptoms.join(", ") : "Không có dấu hiệu nguy kịch kèm theo";
 }

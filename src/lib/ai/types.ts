@@ -16,12 +16,24 @@ export interface ContextualChipOption {
   clinicalCategory?: string;
 }
 
+export interface AtomicClinicalFact {
+  id: string;
+  category: "CHIEF_COMPLAINT" | "DURATION" | "CHARACTER_TRIGGERS" | "ASSOCIATED_SIGNS" | "SEVERITY" | "RED_FLAG";
+  label: string;
+  value: string;
+  rawSnippet: string;
+  severity?: "MILD" | "MODERATE" | "SEVERE" | "CRITICAL";
+  provenance: "PATIENT_EXPLICIT";
+  sourceTurn: number;
+}
+
 export interface ClinicalSlotMatrix {
   chiefComplaint: {
     status: SlotStatus;
     value?: string;
     label: string;
     clarityScore: number;
+    severityModifier?: string;
   };
   duration: {
     status: SlotStatus;
@@ -34,6 +46,7 @@ export interface ClinicalSlotMatrix {
     value?: string;
     label: string;
     clarityScore: number;
+    severityModifier?: string;
   };
   associatedSigns: {
     status: SlotStatus;
@@ -51,6 +64,7 @@ export interface LivingClinicalContext {
   isEmergency: boolean;
   urgencyLevel: TriageUrgencyLevel;
   slots: ClinicalSlotMatrix;
+  atomicFacts: AtomicClinicalFact[];
   activeTargetSlot?: keyof ClinicalSlotMatrix;
   currentQuestion?: string;
   suggestedChips: ContextualChipOption[];
@@ -72,6 +86,7 @@ export interface PsychologicalSoothingPayload {
 
 export interface SlotEvaluationResult {
   updatedSlots: ClinicalSlotMatrix;
+  atomicFacts: AtomicClinicalFact[];
   progressPercentage: number;
   isAllCompleted: boolean;
   isEmergency: boolean;
@@ -79,4 +94,5 @@ export interface SlotEvaluationResult {
   suggestedChips: ContextualChipOption[];
   matchedSpecialtyCode?: string;
   matchedSpecialtyName?: string;
+  dynamicClinicalReasoning?: string;
 }

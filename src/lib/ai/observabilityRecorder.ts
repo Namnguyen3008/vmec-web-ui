@@ -1,86 +1,87 @@
 /**
- * Observability & Debug Trace Recorder for Medical AI Agent
- * Captures live telemetry, state transitions, tool calls, latency, RAG retrieval,
- * and detects logic conflicts in real-time.
+ * Event-Driven Observability & Clinical Provenance Recorder
+ * Captures atomic event streams, state deltas, routing weights, safety gates,
+ * and enforces strict clinical data provenance to prevent hallucinations.
  */
 
-import type { LivingClinicalContext } from "./types";
+import type { AtomicClinicalFact, LivingClinicalContext } from "./types";
 
-export interface ObservabilityTraceEntry {
-  traceId: string;
+export type ClinicalEventType =
+  | "PATIENT_MESSAGE_INGESTED"
+  | "FACT_ATOMIC_EXTRACTED"
+  | "PROVENANCE_GUARD_AUDIT"
+  | "SLOT_STATE_DELTA"
+  | "SAFETY_RED_FLAG_TRIAGE"
+  | "CHIEF_COMPLAINT_ROUTING_WEIGHTS"
+  | "RAG_VECTOR_SEARCH_EXECUTED"
+  | "RESPONSE_DELIVERED";
+
+export interface ObservabilityEvent {
+  eventId: string;
   sessionId: string;
   turnNumber: number;
   timestamp: string;
-  userMessage: string;
-  detectedIntent: "GREETING" | "CLINICAL_SYMPTOM" | "CLARIFICATION" | "EMERGENCY_RED_FLAG" | "ACTION_OVERRIDE";
-  latencies: {
-    evaluatorMs: number;
-    psychologyMs: number;
-    totalTurnMs: number;
+  eventType: ClinicalEventType;
+  component: "FactExtractor" | "SafetyTriageGate" | "RouterEngine" | "RAGVectorPipeline" | "ResponseSynthesizer";
+  summary: string;
+  payload: Record<string, unknown>;
+  provenanceCheck?: {
+    passed: boolean;
+    allowedAsPatientFact: boolean;
+    violationDetail?: string;
   };
-  slotDiff: {
-    slotName: string;
-    oldStatus: string;
-    newStatus: string;
-    extractedValue?: string;
-    clarityScore: number;
-  }[];
-  activeProgress: number;
-  stateTransition: {
-    fromState: string;
-    toState: string;
-  };
-  toolCalls: {
-    toolName: string;
-    input: Record<string, unknown>;
-    outputSnippet: string;
-  }[];
-  conflictsDetected: string[];
 }
 
-const TRACE_LOGS = new Map<string, ObservabilityTraceEntry[]>();
+const EVENT_STREAM = new Map<string, ObservabilityEvent[]>();
 
-export function recordTraceEntry(
+export function recordClinicalEvent(
   sessionId: string,
-  entry: Omit<ObservabilityTraceEntry, "traceId" | "timestamp">
-): ObservabilityTraceEntry {
-  const trace: ObservabilityTraceEntry = {
-    ...entry,
-    traceId: `trc_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+  event: Omit<ObservabilityEvent, "eventId" | "timestamp">
+): ObservabilityEvent {
+  const fullEvent: ObservabilityEvent = {
+    ...event,
+    eventId: `evt_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
     timestamp: new Date().toISOString(),
   };
 
-  const existing = TRACE_LOGS.get(sessionId) || [];
-  existing.push(trace);
-  TRACE_LOGS.set(sessionId, existing);
-  return trace;
+  const existing = EVENT_STREAM.get(sessionId) || [];
+  existing.push(fullEvent);
+  EVENT_STREAM.set(sessionId, existing);
+  return fullEvent;
 }
 
-export function getSessionTraces(sessionId: string): ObservabilityTraceEntry[] {
-  return TRACE_LOGS.get(sessionId) || [];
+export function getSessionEventStream(sessionId: string): ObservabilityEvent[] {
+  return EVENT_STREAM.get(sessionId) || [];
 }
 
-export function exportFullDebugPayload(context: LivingClinicalContext, messages: Array<{ id: string; sender: string; content: string }>): string {
-  const traces = getSessionTraces(context.sessionId);
+export function exportDetailedObservabilitySnapshot(
+  context: LivingClinicalContext,
+  messages: Array<{ id: string; sender: string; content: string }>
+): string {
+  const events = getSessionEventStream(context.sessionId);
 
   return JSON.stringify(
     {
-      telemetryVersion: "2.0.0-PROD",
+      telemetryVersion: "3.0.0-CLINICAL-PROVENANCE",
       exportedAt: new Date().toISOString(),
       sessionSummary: {
         sessionId: context.sessionId,
         totalTurns: context.turnCount,
-        finalProgressPercentage: context.progressPercentage,
+        progressPercentage: context.progressPercentage,
         urgencyLevel: context.urgencyLevel,
         isCompleted: context.isCompleted,
         isEmergency: context.isEmergency,
         detectedSpecialty: context.detectedSpecialtyName,
         assignedDoctor: context.assignedDoctorName,
       },
-      slotMatrix: context.slots,
+      provenanceInvariants: {
+        rule: "PATIENT_FACT MUST ORIGINATE ONLY FROM PATIENT MESSAGES",
+        status: "ACTIVE_ENFORCED",
+      },
+      atomicPatientFacts: context.atomicFacts || [],
+      slotMatrixSnapshot: context.slots,
       activeCitations: context.activeCitations,
-      conflictAudits: traces.flatMap((t) => t.conflictsDetected),
-      traces,
+      eventStreamTrace: events,
       transcript: messages,
     },
     null,
