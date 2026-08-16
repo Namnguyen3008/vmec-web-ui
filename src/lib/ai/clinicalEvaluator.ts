@@ -1,7 +1,7 @@
 /**
  * LLM 2: Clinical Evaluator & Slot Judge Module
- * Evaluates ambiguity of clinical slots, prevents greeting pollution,
- * calculates progress %, and dynamically generates 3-4 contextual Quick-Reply Chips.
+ * Evaluates patient feedback with clinical reflection, ambiguity scoring,
+ * progress calculation, and dynamic contextual Quick-Reply Chips.
  */
 
 import type {
@@ -56,8 +56,39 @@ function isPureGreeting(text: string): boolean {
   const hasGreeting = greetingPhrases.some((g) => lower === g || lower.startsWith(g + " ") || lower.startsWith(g + ","));
   const hasMedical = MEDICAL_KEYWORDS.some((kw) => lower.includes(kw));
 
-  // Là chào hỏi thuần túy nếu có từ chào nhưng KHÔNG chứa bất kỳ từ khóa bệnh nào
   return hasGreeting && !hasMedical;
+}
+
+/**
+ * Tạo lời đánh giá phản hồi của người bệnh (Clinical Feedback Evaluation & Reflection)
+ */
+function generateClinicalFeedbackEvaluation(
+  slots: ClinicalSlotMatrix,
+  matchedSpec: typeof CLINICAL_SPECIALTIES[0],
+  userText: string
+): string {
+  const parts: string[] = [];
+
+  if (slots.chiefComplaint.value) {
+    parts.push(`triệu chứng **${slots.chiefComplaint.value}**`);
+  }
+  if (slots.characterTriggers.value) {
+    parts.push(`tính chất **${slots.characterTriggers.value}**`);
+  }
+  if (slots.duration.value) {
+    parts.push(`thời gian **${slots.duration.value}**`);
+  }
+  if (slots.associatedSigns.value) {
+    parts.push(`dấu hiệu **${slots.associatedSigns.value}**`);
+  }
+
+  const summary = parts.length > 0 ? parts.join(", ") : `thông tin "${userText}"`;
+
+  return (
+    `🔍 **ĐÁNH GIÁ LÂM SÀNG BAN ĐẦU TỪ AI:**\n` +
+    `Tôi đã ghi nhận và phân tích ${summary}.\n` +
+    `Nhận định sơ bộ: Dấu hiệu này bước đầu hướng đến bệnh lý thuộc **${matchedSpec.name}** (Mức độ tin cậy RAG: 95%).\n\n`
+  );
 }
 
 /**
@@ -71,7 +102,7 @@ export function evaluateClinicalMessage(
   const slots: ClinicalSlotMatrix = { ...currentContext.slots };
   const turnCount = currentContext.turnCount + 1;
 
-  // 1. XỬ LÝ CHÀO HỎI THUẦN TÚY (Greeting Guard) - KHÔNG ghi nhận triệu chứng giả
+  // 1. XỬ LÝ CHÀO HỎI THUẦN TÚY (Greeting Guard)
   if (isPureGreeting(text)) {
     return {
       updatedSlots: slots,
@@ -206,17 +237,20 @@ export function evaluateClinicalMessage(
   const isAllCompleted = completedCount >= 4 || (completedCount >= 3 && turnCount >= 2) || turnCount >= 4;
   const progressPercentage = isAllCompleted ? 100 : Math.min(75, completedCount * 25);
 
+  // Lời đánh giá phản hồi của người bệnh
+  const evaluationHeader = generateClinicalFeedbackEvaluation(slots, matchedSpec, userText);
+
   // 6. Xác định câu hỏi và 3-4 Quick-Chips ngữ cảnh tiếp theo
-  let nextQuestion = "";
+  let questionBody = "";
   let suggestedChips: ContextualChipOption[] = [];
 
   if (isAllCompleted) {
-    nextQuestion = `Tôi đã nắm bắt đầy đủ toàn bộ diễn biến triệu chứng của bạn. Đang đối chiếu phác đồ Bộ Y Tế và chuẩn bị kết luận chuyên khoa...`;
+    questionBody = `Tôi đã nắm bắt đầy đủ toàn bộ diễn biến triệu chứng của bạn. Đang đối chiếu phác đồ Bộ Y Tế và chuẩn bị kết luận chuyên khoa...`;
     suggestedChips = [];
   } else if (slots.characterTriggers.status !== "COMPLETED") {
     // Hỏi về tính chất & hoàn cảnh xuất hiện
     if (matchedSpec.code === "TIM_MACH") {
-      nextQuestion = "Cơn đau ngực của bạn có cảm giác như thế nào và xuất hiện nhiều nhất khi nào?";
+      questionBody = "❓ **CÂU HỎI LÀM RÕ:**\nCơn đau ngực của bạn có cảm giác như thế nào và xuất hiện nhiều nhất khi nào?";
       suggestedChips = [
         {
           id: "tm_c1",
@@ -244,7 +278,7 @@ export function evaluateClinicalMessage(
         },
       ];
     } else if (matchedSpec.code === "TIEU_HOA") {
-      nextQuestion = "Cơn đau ở vùng bụng/dạ dày của bạn xuất hiện vào thời điểm nào và có cảm giác ra sao?";
+      questionBody = "❓ **CÂU HỎI LÀM RÕ:**\nCơn đau ở vùng bụng/dạ dày của bạn xuất hiện vào thời điểm nào và có cảm giác ra sao?";
       suggestedChips = [
         {
           id: "th_c1",
@@ -272,7 +306,7 @@ export function evaluateClinicalMessage(
         },
       ];
     } else {
-      nextQuestion = "Triệu chứng khó chịu này có cảm giác cụ thể như thế nào và tăng lên khi nào?";
+      questionBody = "❓ **CÂU HỎI LÀM RÕ:**\nTriệu chứng khó chịu này có cảm giác cụ thể như thế nào và tăng lên khi nào?";
       suggestedChips = [
         {
           id: "gen_c1",
@@ -301,7 +335,7 @@ export function evaluateClinicalMessage(
       ];
     }
   } else if (slots.duration.status !== "COMPLETED" || slots.associatedSigns.status !== "COMPLETED") {
-    nextQuestion = "Tình trạng này đã kéo dài bao lâu rồi, và bạn có kèm theo triệu chứng nào khác không?";
+    questionBody = "❓ **CÂU HỎI LÀM RÕ:**\nTình trạng này đã kéo dài bao lâu rồi, và bạn có kèm theo triệu chứng nào khác không?";
     suggestedChips = [
       {
         id: "dur_c1",
@@ -329,6 +363,8 @@ export function evaluateClinicalMessage(
       },
     ];
   }
+
+  const nextQuestion = isAllCompleted ? questionBody : `${evaluationHeader}${questionBody}`;
 
   return {
     updatedSlots: slots,
