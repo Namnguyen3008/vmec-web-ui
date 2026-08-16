@@ -12,7 +12,7 @@ import { list, mapChatMessage, mapChatSession, mapSendMessageResult, mapWorkflow
 /**
  * 40 Chuyên khoa & Tri thức định tuyến chuẩn y tế từ Dataset VMEC kèm Citations RAG
  */
-const CLINICAL_SPECIALTIES = [
+export const CLINICAL_SPECIALTIES = [
   {
     code: "TIM_MACH",
     name: "Khoa Tim Mạch",
@@ -225,12 +225,12 @@ const EMERGENCY_KEYWORDS = [
   "chảy máu không cầm",
 ];
 
-function detectEmergency(text: string): boolean {
+export function detectEmergency(text: string): boolean {
   const lower = text.toLowerCase();
   return EMERGENCY_KEYWORDS.some((kw) => lower.includes(kw));
 }
 
-function matchSpecialty(text: string) {
+export function matchSpecialty(text: string) {
   const lower = text.toLowerCase();
   for (const spec of CLINICAL_SPECIALTIES) {
     if (spec.keywords.some((kw) => lower.includes(kw))) {
@@ -240,7 +240,7 @@ function matchSpecialty(text: string) {
   return CLINICAL_SPECIALTIES[CLINICAL_SPECIALTIES.length - 1]; // Default to Nội tổng quát
 }
 
-function generateOffers(spec: typeof CLINICAL_SPECIALTIES[0]): AppointmentOffer[] {
+export function generateOffers(spec: typeof CLINICAL_SPECIALTIES[0]): AppointmentOffer[] {
   const today = new Date();
   const tomorrow = new Date(today);
   tomorrow.setDate(tomorrow.getDate() + 1);
