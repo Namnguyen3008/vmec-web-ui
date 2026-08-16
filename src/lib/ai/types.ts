@@ -51,7 +51,7 @@ export interface LivingClinicalContext {
   isEmergency: boolean;
   urgencyLevel: TriageUrgencyLevel;
   slots: ClinicalSlotMatrix;
-  activeTargetSlot: keyof ClinicalSlotMatrix;
+  activeTargetSlot?: keyof ClinicalSlotMatrix;
   currentQuestion?: string;
   suggestedChips: ContextualChipOption[];
   detectedSpecialtyCode?: string;
