@@ -1,17 +1,7 @@
 "use client";
 
 import type { LivingClinicalContext } from "@/lib/ai/types";
-import {
-  CheckCircle2,
-  Clock,
-  Activity,
-  ShieldCheck,
-  Zap,
-  FileText,
-  AlertTriangle,
-  Flame,
-  ArrowRight,
-} from "lucide-react";
+import { Zap, ArrowRight } from "lucide-react";
 
 interface LivingContextSidebarProps {
   context: LivingClinicalContext;
@@ -33,31 +23,7 @@ export function LivingContextSidebar({
   onForceComplete,
   className = "",
 }: LivingContextSidebarProps) {
-  const { slots, progressPercentage, isCompleted, isEmergency, urgencyLevel, activeCitations } =
-    context;
-
-  const slotItems = [
-    {
-      key: "chiefComplaint",
-      data: slots.chiefComplaint,
-      icon: Activity,
-    },
-    {
-      key: "duration",
-      data: slots.duration,
-      icon: Clock,
-    },
-    {
-      key: "characterTriggers",
-      data: slots.characterTriggers,
-      icon: Flame,
-    },
-    {
-      key: "associatedSigns",
-      data: slots.associatedSigns,
-      icon: AlertTriangle,
-    },
-  ];
+  const { progressPercentage, isCompleted, isEmergency } = context;
 
   return (
     <div
@@ -108,7 +74,7 @@ export function LivingContextSidebar({
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1.5">
             <span className="flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-            <h3 className="text-xs font-bold text-ink-900">Hồ Sơ Ngữ Cảnh Sống</h3>
+            <h3 className="text-xs font-bold text-ink-900">Tiến Độ Thu Thập Hồ Sơ</h3>
           </div>
           <span className="rounded-full bg-primary-50 px-2 py-0.5 text-[10px] font-bold text-primary-800">
             {progressPercentage}% Đạt
@@ -128,116 +94,6 @@ export function LivingContextSidebar({
             style={{ width: `${progressPercentage}%` }}
           />
         </div>
-      </div>
-
-      {/* 4 Clinical Slots Checklist */}
-      <div className="mt-3 space-y-2">
-        <div className="text-[10px] font-bold text-ink-400 uppercase tracking-wider">
-          Tiêu Chuẩn Lâm Sàng (4 Trường)
-        </div>
-
-        {slotItems.map((item, idx) => {
-          const isDone = item.data.status === "COMPLETED";
-          const isInProgress = item.data.status === "IN_PROGRESS";
-
-          return (
-            <div
-              key={item.key}
-              className={`rounded-lg border p-2 text-xs transition-all ${
-                isDone
-                  ? "border-emerald-200 bg-emerald-50/40"
-                  : isInProgress
-                  ? "border-primary-200 bg-primary-50/30"
-                  : "border-line bg-surface/50 opacity-70"
-              }`}
-            >
-              <div className="flex items-center justify-between gap-1.5">
-                <div className="flex items-center gap-1.5 min-w-0">
-                  <div
-                    className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[9px] font-bold ${
-                      isDone
-                        ? "bg-emerald-600 text-white"
-                        : isInProgress
-                        ? "bg-primary-600 text-white"
-                        : "bg-neutral-200 text-ink-500"
-                    }`}
-                  >
-                    {isDone ? "✓" : idx + 1}
-                  </div>
-                  <span className="text-[11px] font-bold text-ink-900 truncate">
-                    {item.data.label}
-                  </span>
-                </div>
-
-                {isDone ? (
-                  <CheckCircle2 size={13} className="text-emerald-600 shrink-0" />
-                ) : isInProgress ? (
-                  <span className="text-[9px] font-bold text-primary-700 bg-primary-100 px-1 py-0.2 rounded shrink-0">
-                    Đang hỏi
-                  </span>
-                ) : (
-                  <span className="text-[9px] text-ink-400 shrink-0">Đang chờ</span>
-                )}
-              </div>
-
-              {item.data.value && (
-                <div className="mt-1 pl-5 text-[10px] text-ink-700 italic line-clamp-2">
-                  &ldquo;{item.data.value}&rdquo;
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Triage Level Meter */}
-      <div className="mt-3 rounded-lg border border-line bg-bg-muted p-2.5">
-        <div className="flex items-center justify-between">
-          <span className="text-[11px] font-bold text-ink-800">Phân Tầng Triage:</span>
-          {isEmergency ? (
-            <span className="rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-bold text-red-700 animate-pulse">
-              🚨 Cấp Cứu 115
-            </span>
-          ) : isCompleted ? (
-            <span className="rounded-full bg-blue-100 px-1.5 py-0.5 text-[10px] font-bold text-blue-800">
-              Mức II: Ưu Tiên
-            </span>
-          ) : (
-            <span className="rounded-full bg-neutral-200 px-1.5 py-0.5 text-[10px] font-semibold text-ink-700">
-              Đang Phân Tích
-            </span>
-          )}
-        </div>
-      </div>
-
-      {/* Active Citations */}
-      <div className="mt-3 space-y-1.5">
-        <div className="text-[10px] font-bold text-ink-400 uppercase tracking-wider flex items-center gap-1">
-          <ShieldCheck size={12} className="text-primary-600" />
-          <span>Phác Đồ BYT Tham Chiếu</span>
-        </div>
-        {activeCitations && activeCitations.length > 0 ? (
-          activeCitations.map((cite, idx) => (
-            <div
-              key={idx}
-              className="rounded-lg border border-emerald-200 bg-emerald-50/50 p-2 text-[10px] shadow-2xs"
-            >
-              <div className="font-bold text-ink-900 truncate flex items-center gap-1">
-                <FileText size={11} className="text-emerald-700 shrink-0" />
-                <span>{cite.label}</span>
-              </div>
-              {cite.documentId && (
-                <div className="text-[9px] text-emerald-800 font-mono mt-0.5">
-                  {cite.documentId} ({cite.confidence || 96}%)
-                </div>
-              )}
-            </div>
-          ))
-        ) : (
-          <div className="rounded-lg border border-dashed border-line bg-surface/40 p-2 text-[10px] text-ink-400 italic">
-            Chờ đủ 4 tiêu chuẩn để kích hoạt RAG Vector Search...
-          </div>
-        )}
       </div>
 
       {/* Skip / Force Complete Button if not completed */}
