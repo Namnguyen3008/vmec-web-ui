@@ -579,33 +579,7 @@ export function evaluateClinicalMessage(
         "4. **Sàng lọc & Cảnh báo Cấp cứu 115**: Tự động nhận diện các dấu hiệu nguy hiểm (nhồi máu cơ tim, đột quỵ, khó thở cấp) để hướng dẫn cấp cứu ngay lập tức.\n\n" +
         "⚠️ *Lưu ý: AI Agent đóng vai trò hỗ trợ tiếp đón, phân loại và điều hướng chuyên khoa; không đưa ra kết luận chẩn đoán bệnh học hoặc phác đồ điều trị thay thế Bác sĩ lâm sàng.*\n\n" +
         "Nếu bạn hoặc người thân đang gặp phải triệu chứng khó chịu hoặc cần hỗ trợ đặt lịch khám tại Bệnh viện VMEC, xin vui lòng chia sẻ thông tin để tôi được phục vụ bạn chu đáo nhất!",
-      suggestedChips: [
-        {
-          id: "sec_1",
-          display: "Đau tức ngực trái khi gắng sức",
-          fullText: "Tôi bị đau tức ngực trái khi leo cầu thang và hồi hộp",
-          clinicalCategory: "CARDIAC",
-        },
-        {
-          id: "sec_2",
-          display: "Đau đầu nhói buốt dữ dội",
-          fullText: "Tôi bị đau đầu nhói buốt dữ dội từng cơn",
-          clinicalCategory: "NEURO",
-        },
-        {
-          id: "sec_3",
-          display: "Đau âm ỉ vùng thượng vị, ợ chua",
-          fullText: "Tôi bị đau âm ỉ vùng thượng vị sau khi ăn kèm ợ chua",
-          clinicalCategory: "GASTRO",
-        },
-        {
-          id: "sec_4",
-          display: "Đau nhức khớp gối, khó đi lại",
-          fullText: "Tôi bị đau nhức khớp gối nhiều ngày nay đi lại khó khăn",
-          clinicalCategory: "CO_XUONG_KHOP",
-        },
-      ],
-      activeTargetSlot: "chiefComplaint",
+      suggestedChips: [],
     };
   }
 
@@ -627,33 +601,7 @@ export function evaluateClinicalMessage(
         "• 🚨 **Sàng lọc Dấu hiệu Cấp cứu 115**: Phát hiện tức thì các biểu hiện khẩn cấp đe dọa tính mạng để hướng dẫn xử trí cấp cứu kịp thời.\n\n" +
         "🌿 **CAM KẾT DỊCH VỤ & BẢO MẬT:**\n" +
         "Mọi dữ liệu trao đổi của bạn được bảo mật tuyệt đối theo tiêu chuẩn an toàn thông tin y tế. Hãy chia sẻ bất kỳ triệu chứng hay nhu cầu khám bệnh nào bạn đang gặp phải, tôi luôn sẵn sàng hỗ trợ bạn ngay bây giờ!",
-      suggestedChips: [
-        {
-          id: "id_1",
-          display: "Đau tức ngực trái khi gắng sức",
-          fullText: "Tôi bị đau tức ngực trái khi leo cầu thang và hồi hộp",
-          clinicalCategory: "CARDIAC",
-        },
-        {
-          id: "id_2",
-          display: "Đau đầu nhói buốt dữ dội",
-          fullText: "Tôi bị đau đầu nhói buốt dữ dội từng cơn",
-          clinicalCategory: "NEURO",
-        },
-        {
-          id: "id_3",
-          display: "Đau âm ỉ vùng thượng vị, ợ chua",
-          fullText: "Tôi bị đau âm ỉ vùng thượng vị sau khi ăn kèm ợ chua",
-          clinicalCategory: "GASTRO",
-        },
-        {
-          id: "id_4",
-          display: "Đau nhức khớp gối, khó đi lại",
-          fullText: "Tôi bị đau nhức khớp gối nhiều ngày nay đi lại khó khăn",
-          clinicalCategory: "CO_XUONG_KHOP",
-        },
-      ],
-      activeTargetSlot: "chiefComplaint",
+      suggestedChips: [],
     };
   }
 
@@ -669,33 +617,7 @@ export function evaluateClinicalMessage(
         "Tôi là **AI Agent Trợ Lý Đặt Lịch Khám & Điều Hướng Chuyên Khoa Thông Minh** của Hệ thống Y tế Đa khoa Quốc tế VMEC.\n\n" +
         "Tôi được đào tạo chuyên biệt để tiếp nhận triệu chứng sức khỏe, tư vấn chuyên khoa khám bệnh và hỗ trợ đặt lịch khám theo tiêu chuẩn y tế. Do đó, tôi không thể phản hồi các câu hỏi nằm ngoài phạm vi y khoa và chăm sóc sức khỏe (như giải trí, tin tức xã hội, tài chính, công nghệ chung,...).\n\n" +
         "Nếu bạn hoặc người thân đang có triệu chứng khó chịu trong người hoặc cần hỗ trợ đặt lịch khám tại Bệnh viện VMEC, xin vui lòng chia sẻ thông tin để tôi hỗ trợ bạn ngay nhé!",
-      suggestedChips: [
-        {
-          id: "off_1",
-          display: "Đau tức ngực trái khi gắng sức",
-          fullText: "Tôi bị đau tức ngực trái khi leo cầu thang và hồi hộp",
-          clinicalCategory: "CARDIAC",
-        },
-        {
-          id: "off_2",
-          display: "Đau đầu nhói buốt dữ dội",
-          fullText: "Tôi bị đau đầu nhói buốt dữ dội từng cơn",
-          clinicalCategory: "NEURO",
-        },
-        {
-          id: "off_3",
-          display: "Đau âm ỉ vùng thượng vị, ợ chua",
-          fullText: "Tôi bị đau âm ỉ vùng thượng vị sau khi ăn kèm ợ chua",
-          clinicalCategory: "GASTRO",
-        },
-        {
-          id: "off_4",
-          display: "Đau nhức khớp gối, khó đi lại",
-          fullText: "Tôi bị đau nhức khớp gối nhiều ngày nay đi lại khó khăn",
-          clinicalCategory: "CO_XUONG_KHOP",
-        },
-      ],
-      activeTargetSlot: "chiefComplaint",
+      suggestedChips: [],
     };
   }
 
@@ -708,33 +630,7 @@ export function evaluateClinicalMessage(
       isAllCompleted: false,
       isEmergency: false,
       nextQuestion: "Chào bạn! Tôi là **AI Agent Trợ Lý Đặt Lịch Khám & Điều Hướng Chuyên Khoa Thông Minh (VMEC)**. Bạn đang cảm thấy khó chịu ở vị trí nào trong cơ thể (như đau đầu, tức ngực, buồn nôn, đau dạ dày, sốt,...) hoặc có nhu cầu khám chuyên khoa nào?",
-      suggestedChips: [
-        {
-          id: "g_1",
-          display: "Đau đầu nhói buốt dữ dội",
-          fullText: "Tôi bị đau đầu nhói buốt dữ dội từng cơn",
-          clinicalCategory: "NEURO",
-        },
-        {
-          id: "g_2",
-          display: "Đau tức ngực trái khi gắng sức",
-          fullText: "Tôi bị đau tức ngực trái khi leo cầu thang và hồi hộp",
-          clinicalCategory: "CARDIAC",
-        },
-        {
-          id: "g_3",
-          display: "Cảm thấy buồn nôn, chóng mặt",
-          fullText: "Tôi cảm thấy buồn nôn và hơi chóng mặt",
-          clinicalCategory: "GASTRO_NEURO",
-        },
-        {
-          id: "g_4",
-          display: "Ra mồ hôi tay chân, rét run",
-          fullText: "Tôi thường xuyên ra mồ hôi tay chân, rét run",
-          clinicalCategory: "ENDOCRINE",
-        },
-      ],
-      activeTargetSlot: "chiefComplaint",
+      suggestedChips: [],
     };
   }
 

@@ -55,32 +55,7 @@ export function updateLivingContextWithUserMessage(
       provenanceCheck: { passed: false, allowedAsPatientFact: false },
     });
 
-    currentContext.suggestedChips = [
-      {
-        id: "sec_1",
-        display: "Đau tức ngực trái khi gắng sức",
-        fullText: "Tôi bị đau tức ngực trái khi leo cầu thang và hồi hộp",
-        clinicalCategory: "CARDIAC",
-      },
-      {
-        id: "sec_2",
-        display: "Đau đầu nhói buốt dữ dội",
-        fullText: "Tôi bị đau đầu nhói buốt dữ dội từng cơn",
-        clinicalCategory: "NEURO",
-      },
-      {
-        id: "sec_3",
-        display: "Đau âm ỉ vùng thượng vị, ợ chua",
-        fullText: "Tôi bị đau âm ỉ vùng thượng vị sau khi ăn kèm ợ chua",
-        clinicalCategory: "GASTRO",
-      },
-      {
-        id: "sec_4",
-        display: "Đau nhức khớp gối, khó đi lại",
-        fullText: "Tôi bị đau nhức khớp gối nhiều ngày nay đi lại khó khăn",
-        clinicalCategory: "CO_XUONG_KHOP",
-      },
-    ];
+    currentContext.suggestedChips = [];
 
     return {
       context: currentContext,
