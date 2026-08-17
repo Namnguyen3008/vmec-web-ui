@@ -42,7 +42,7 @@ export function updateLivingContextWithUserMessage(
 ): { context: LivingClinicalContext; replyText: string } {
   const currentContext = getOrCreateLivingContext(sessionId);
 
-  // 0. Google Model Armor AI Safety & Gateway Interceptor
+  // 0. Safety Gateway
   const armorResult = sanitizeUserPromptSync(userMessage);
   if (!armorResult.isSafe) {
     recordClinicalEvent(sessionId, {
@@ -72,7 +72,7 @@ export function updateLivingContextWithUserMessage(
   currentContext.isEmergency = evalResult.isEmergency;
   currentContext.isCompleted = evalResult.isAllCompleted;
 
-  // Record Ingestion Event
+  // Record Events
   recordClinicalEvent(sessionId, {
     sessionId,
     turnNumber: currentContext.turnCount,
@@ -80,30 +80,19 @@ export function updateLivingContextWithUserMessage(
     component: "FactExtractor",
     summary: `Tiếp nhận tin nhắn bệnh nhân: "${userMessage}"`,
     payload: { rawText: userMessage, currentProgress: evalResult.progressPercentage },
-    provenanceCheck: {
-      passed: true,
-      allowedAsPatientFact: true,
-    },
+    provenanceCheck: { passed: true, allowedAsPatientFact: true },
   });
 
-  // Record Slot Mutation Delta
   recordClinicalEvent(sessionId, {
     sessionId,
     turnNumber: currentContext.turnCount,
     eventType: "SLOT_STATE_DELTA",
     component: "FactExtractor",
     summary: `Cập nhật Slots & Atomic Facts (Tổng: ${evalResult.atomicFacts.length} facts)`,
-    payload: {
-      slots: evalResult.updatedSlots,
-      atomicFacts: evalResult.atomicFacts,
-    },
-    provenanceCheck: {
-      passed: true,
-      allowedAsPatientFact: true,
-    },
+    payload: { slots: evalResult.updatedSlots, atomicFacts: evalResult.atomicFacts },
+    provenanceCheck: { passed: true, allowedAsPatientFact: true },
   });
 
-  // Record Judge LLM Evaluation Event
   if (evalResult.judgeResult) {
     currentContext.lastJudgeResult = evalResult.judgeResult;
     recordClinicalEvent(sessionId, {
@@ -119,10 +108,7 @@ export function updateLivingContextWithUserMessage(
         reasoning: evalResult.judgeResult.reasoning,
         extractedFact: evalResult.judgeResult.extractedFact,
       },
-      provenanceCheck: {
-        passed: evalResult.judgeResult.verdict === "SATISFIED",
-        allowedAsPatientFact: true,
-      },
+      provenanceCheck: { passed: evalResult.judgeResult.verdict === "SATISFIED", allowedAsPatientFact: true },
     });
   }
 
@@ -142,23 +128,10 @@ export function updateLivingContextWithUserMessage(
       },
     ];
 
-    recordClinicalEvent(sessionId, {
-      sessionId,
-      turnNumber: currentContext.turnCount,
-      eventType: "SAFETY_RED_FLAG_TRIAGE",
-      component: "SafetyTriageGate",
-      summary: "Kích hoạt ngắt khẩn cấp Cấp cứu 115",
-      payload: { urgencyLevel: "EMERGENCY_115" },
-    });
-
     MEMORY_CACHE.set(sessionId, currentContext);
-    return {
-      context: currentContext,
-      replyText: evalResult.nextQuestion,
-    };
+    return { context: currentContext, replyText: evalResult.nextQuestion };
   }
 
-  // 1. KHI CHƯA HOÀN TẤT ĐỦ 4 TRƯỜNG LÂM SÀNG
   if (!evalResult.isAllCompleted) {
     currentContext.detectedSpecialtyCode = undefined;
     currentContext.detectedSpecialtyName = undefined;
@@ -171,13 +144,10 @@ export function updateLivingContextWithUserMessage(
     currentContext.currentQuestion = evalResult.nextQuestion;
 
     MEMORY_CACHE.set(sessionId, currentContext);
-    return {
-      context: currentContext,
-      replyText: evalResult.nextQuestion,
-    };
+    return { context: currentContext, replyText: evalResult.nextQuestion };
   }
 
-  // 2. KHI ĐÃ ĐỦ THÔNG TIN LÂM SÀNG (100% ĐẠT)
+  // 100% Completed
   const matchedSpec =
     CLINICAL_SPECIALTIES.find((s) => s.code === evalResult.matchedSpecialtyCode) ||
     CLINICAL_SPECIALTIES[0];
@@ -190,45 +160,28 @@ export function updateLivingContextWithUserMessage(
   currentContext.activeCitations = matchedSpec.citations;
   currentContext.suggestedChips = [];
   currentContext.appointmentOffers = generateOffers(matchedSpec);
-
-  // Kích hoạt LLM 3: Chuyên gia Tâm lý Y khoa (Psychology Specialist)
   currentContext.soothingPayload = generatePsychologicalSoothing({
     specialtyCode: matchedSpec.code,
     specialtyName: matchedSpec.name,
     doctorName: matchedSpec.doctor,
   });
 
-  // Record Routing & RAG Search Event
-  recordClinicalEvent(sessionId, {
-    sessionId,
-    turnNumber: currentContext.turnCount,
-    eventType: "RAG_VECTOR_SEARCH_EXECUTED",
-    component: "RAGVectorPipeline",
-    summary: `Đối chiếu phác đồ BYT cho ${matchedSpec.name}`,
-    payload: {
-      matchedSpecialty: matchedSpec.name,
-      doctor: matchedSpec.doctor,
-      citations: matchedSpec.citations,
-      reasoning: evalResult.dynamicClinicalReasoning,
-    },
-  });
-
   const primaryCitation = matchedSpec.citations[0];
-  const symptomSummary = [
-    currentContext.slots.chiefComplaint.value,
-    currentContext.slots.characterTriggers.value,
-    currentContext.slots.duration.value,
-    currentContext.slots.associatedSigns.value,
-  ]
-    .filter(Boolean)
-    .join(" — ");
+  const soothingMsg = currentContext.soothingPayload?.comfortingMessage ||
+    `Bạn hãy yên tâm nhé, các bác sĩ chuyên khoa ${matchedSpec.name} sẽ đồng hành và chăm sóc sức khỏe chu đáo nhất cho bạn.`;
 
   const replyText =
-    `Dựa trên toàn bộ các triệu chứng lâm sàng bạn đã cung cấp (*${symptomSummary}*), tôi đã đối chiếu phác đồ chuyên khoa chuẩn của Bộ Y Tế:\n\n` +
+    `🌿 **LỜI NHẮN AN TÂM TỪ BÁC SĨ:**\n` +
+    `*${soothingMsg}*\n\n` +
+    `---\n\n` +
     `🏥 **CHUYÊN KHOA ĐỀ XUẤT:** **${matchedSpec.name}**\n` +
     `👨‍⚕️ **BÁC SĨ PHỤ TRÁCH:** **${matchedSpec.doctor}** (${matchedSpec.room})\n` +
     `💡 **NHẬN ĐỊNH LÂM SÀNG SƠ BỘ:** ${evalResult.dynamicClinicalReasoning || matchedSpec.reasoning}\n` +
     (primaryCitation ? `📚 **PHÁC ĐỒ THAM CHIẾU:** *${primaryCitation.label} (${primaryCitation.documentId})*\n\n` : `\n`) +
+    `📋 **CHỈ DẪN CHUẨN BỊ TRƯỚC KHI ĐẾN KHÁM:**\n` +
+    `• **Giấy tờ cần mang:** CCCD/VNeID, thẻ BHYT (nếu có) và sổ khám/đơn thuốc cũ đã từng sử dụng.\n` +
+    `• **Thời gian có mặt:** Bạn nên đến trước giờ hẹn 10 - 15 phút tại Quầy Lễ tân để nhận phiếu số thứ tự ưu tiên.\n` +
+    `• **Lưu ý ăn uống:** Nên nhịn ăn sáng nếu cần làm xét nghiệm máu hoặc siêu âm ổ bụng (vẫn được uống nước lọc).\n\n` +
     `👇 *Mời bạn chọn 1 trong 3 khung giờ khám khả dụng bên dưới để giữ chỗ gửi Lễ tân duyệt nhé:*`;
 
   MEMORY_CACHE.set(sessionId, currentContext);
@@ -320,21 +273,21 @@ export async function updateLivingContextWithUserMessageAsync(
   });
 
   const primaryCitation = matchedSpec.citations[0];
-  const symptomSummary = [
-    currentContext.slots.chiefComplaint.value,
-    currentContext.slots.characterTriggers.value,
-    currentContext.slots.duration.value,
-    currentContext.slots.associatedSigns.value,
-  ]
-    .filter(Boolean)
-    .join(" — ");
+  const soothingMsg = currentContext.soothingPayload?.comfortingMessage ||
+    `Bạn hãy yên tâm nhé, các bác sĩ chuyên khoa ${matchedSpec.name} sẽ đồng hành và chăm sóc sức khỏe chu đáo nhất cho bạn.`;
 
   const replyText =
-    `Dựa trên toàn bộ các triệu chứng lâm sàng bạn đã cung cấp (*${symptomSummary}*), tôi đã đối chiếu phác đồ chuyên khoa chuẩn của Bộ Y Tế:\n\n` +
+    `🌿 **LỜI NHẮN AN TÂM TỪ BÁC SĨ:**\n` +
+    `*${soothingMsg}*\n\n` +
+    `---\n\n` +
     `🏥 **CHUYÊN KHOA ĐỀ XUẤT:** **${matchedSpec.name}**\n` +
     `👨‍⚕️ **BÁC SĨ PHỤ TRÁCH:** **${matchedSpec.doctor}** (${matchedSpec.room})\n` +
     `💡 **NHẬN ĐỊNH LÂM SÀNG SƠ BỘ:** ${evalResult.dynamicClinicalReasoning || matchedSpec.reasoning}\n` +
     (primaryCitation ? `📚 **PHÁC ĐỒ THAM CHIẾU:** *${primaryCitation.label} (${primaryCitation.documentId})*\n\n` : `\n`) +
+    `📋 **CHỈ DẪN CHUẨN BỊ TRƯỚC KHI ĐẾN KHÁM:**\n` +
+    `• **Giấy tờ cần mang:** CCCD/VNeID, thẻ BHYT (nếu có) và sổ khám/đơn thuốc cũ đã từng sử dụng.\n` +
+    `• **Thời gian có mặt:** Bạn nên đến trước giờ hẹn 10 - 15 phút tại Quầy Lễ tân để nhận phiếu số thứ tự ưu tiên.\n` +
+    `• **Lưu ý ăn uống:** Nên nhịn ăn sáng nếu cần làm xét nghiệm máu hoặc siêu âm ổ bụng (vẫn được uống nước lọc).\n\n` +
     `👇 *Mời bạn chọn 1 trong 3 khung giờ khám khả dụng bên dưới để giữ chỗ gửi Lễ tân duyệt nhé:*`;
 
   MEMORY_CACHE.set(sessionId, currentContext);

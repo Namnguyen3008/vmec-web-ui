@@ -77,6 +77,20 @@ export function getLocalAppointments(): DetailedAppointment[] {
   }
 }
 
+export function getActivePatientAppointment(): DetailedAppointment | null {
+  if (typeof window === "undefined") return null;
+  const current = getLocalAppointments();
+  return (
+    current.find(
+      (a) =>
+        a.status === "PENDING_RECEPTIONIST_APPROVAL" ||
+        a.status === "PENDING_PATIENT_CONFIRMATION" ||
+        a.status === "CONFIRMED" ||
+        (a.status as string) === "IN_CONSULTATION"
+    ) || null
+  );
+}
+
 export function saveLocalAppointment(appointment: Appointment | DetailedAppointment): void {
   if (typeof window === "undefined") return;
   const current = getLocalAppointments();

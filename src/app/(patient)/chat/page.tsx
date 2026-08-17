@@ -24,11 +24,13 @@ import {
   updateLivingContextWithUserMessageAsync,
   forceCompleteLivingContext,
 } from "@/lib/ai/workingMemoryStore";
+import { getActivePatientAppointment } from "@/lib/api/appointments";
+import type { DetailedAppointment } from "@/lib/mockData";
 import type { LivingClinicalContext, PsychologicalSoothingPayload } from "@/lib/ai/types";
 import { ApiError } from "@/lib/api/client";
 import { containsOfferSection, splitOfferSection } from "@/lib/chatContent";
 import type { AppointmentOffer, ChatActionType, ChatMessage, CheckoutContext } from "@/lib/api/contracts";
-import { RotateCcw, PanelRightOpen, X, Bot } from "lucide-react";
+import { RotateCcw, PanelRightOpen, X, Bot, CalendarCheck, AlertCircle } from "lucide-react";
 
 interface UiMessage {
   id: string;
@@ -86,6 +88,12 @@ export default function ChatPage() {
   const [checkout, setCheckout] = useState<CheckoutContext | null>(null);
   const [lastRawOfferText, setLastRawOfferText] = useState("");
   const [showMobileSidebar, setShowMobileSidebar] = useState(false);
+
+  // Active booked appointment and session booking status
+  const [activeAppointment, setActiveAppointment] = useState<DetailedAppointment | null>(() =>
+    getActivePatientAppointment()
+  );
+  const [hasBookedInSession, setHasBookedInSession] = useState(false);
 
   // Living Clinical Context State
   const [livingContext, setLivingContext] = useState<LivingClinicalContext>(() =>
@@ -145,6 +153,21 @@ export default function ChatPage() {
     void restoreActiveSession();
     return () => {
       cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    const checkActive = () => {
+      setActiveAppointment(getActivePatientAppointment());
+    };
+    checkActive();
+    window.addEventListener("vmec:appointments-change", checkActive);
+    window.addEventListener("p208:schedule-change", checkActive);
+    window.addEventListener("p208:appointment-confirmed", checkActive);
+    return () => {
+      window.removeEventListener("vmec:appointments-change", checkActive);
+      window.removeEventListener("p208:schedule-change", checkActive);
+      window.removeEventListener("p208:appointment-confirmed", checkActive);
     };
   }, []);
 
@@ -299,6 +322,8 @@ export default function ChatPage() {
     setOffers([]);
     setCheckout(null);
     setLastRawOfferText("");
+    setHasBookedInSession(false);
+    setActiveAppointment(getActivePatientAppointment());
     const fresh = getOrCreateLivingContext(`session_${Date.now()}`);
     setLivingContext(fresh);
   }
@@ -307,7 +332,7 @@ export default function ChatPage() {
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, offers, isSending, emergency, livingContext.suggestedChips]);
+  }, [messages, offers, isSending, emergency, livingContext.suggestedChips, hasBookedInSession, activeAppointment]);
 
   return (
     <div className="flex h-[calc(100vh-64px)] flex-col overflow-hidden bg-bg-soft/20">
@@ -325,32 +350,9 @@ export default function ChatPage() {
               Hội chẩn định tuyến & giữ chỗ khám theo chuẩn Bộ Y Tế
             </p>
           </div>
-          {/* AgentObservabilityButton - Temporarily hidden per user request */}
-          {/*
-          <AgentObservabilityButton
-            context={livingContext}
-            messages={messages}
-            className="ml-3 hidden sm:flex"
-          />
-          */}
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Mobile Observability Button & Mobile Living Context Button - Temporarily hidden */}
-          {/*
-          <div className="sm:hidden">
-            <AgentObservabilityButton context={livingContext} messages={messages} />
-          </div>
-          <button
-            type="button"
-            onClick={() => setShowMobileSidebar(!showMobileSidebar)}
-            className="md:hidden flex items-center gap-1.5 rounded-lg border border-line bg-surface px-2.5 py-1 text-xs font-semibold text-primary-800"
-          >
-            <PanelRightOpen size={14} />
-            <span>Hồ sơ ({livingContext.progressPercentage}%)</span>
-          </button>
-          */}
-
           <Button
             type="button"
             variant="outline"
@@ -364,9 +366,29 @@ export default function ChatPage() {
         </div>
       </div>
 
+      {/* Global Active Appointment Notification Banner */}
+      {activeAppointment && (
+        <div className="mx-4 mt-3 rounded-xl border border-primary-300 bg-primary-50/90 px-4 py-2.5 text-xs sm:text-sm text-primary-950 flex items-center justify-between gap-3 shadow-xs">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <span className="flex h-2.5 w-2.5 shrink-0 rounded-full bg-primary-600 animate-pulse" />
+            <div className="truncate">
+              <span className="font-semibold text-primary-900">Bạn đã có 1 lịch hẹn đang xử lý: </span>
+              <strong className="text-primary-800">{activeAppointment.appointmentCode || activeAppointment.id}</strong>
+              <span className="text-primary-700 font-normal"> ({activeAppointment.specialtyName} — {activeAppointment.doctorName})</span>
+            </div>
+          </div>
+          <a
+            href="/bookings"
+            className="shrink-0 inline-flex items-center gap-1 rounded-lg bg-primary-700 px-3 py-1 text-xs font-bold text-white shadow-2xs hover:bg-primary-800 transition-colors"
+          >
+            Xem lịch hẹn →
+          </a>
+        </div>
+      )}
+
       {/* 2-Column Main Workspace */}
       <div className="flex flex-1 overflow-hidden">
-        {/* Left Column: Conversational Stream (Maximized Screen Area) */}
+        {/* Left Column: Conversational Stream */}
         <div className="flex flex-1 flex-col justify-between overflow-hidden">
           <div className="flex-1 space-y-4 overflow-y-auto p-4 sm:p-6" aria-live="polite">
 
@@ -414,8 +436,8 @@ export default function ChatPage() {
               </AgentBubble>
             )}
 
-            {/* Interactive Doctor & Slot Selector */}
-            {(offers.length > 0 || containsOfferSection(lastRawOfferText)) && !checkout && (
+            {/* Interactive Doctor & Slot Selector (Hidden if already booked in session OR active appointment exists) */}
+            {!hasBookedInSession && !activeAppointment && (offers.length > 0 || containsOfferSection(lastRawOfferText)) && !checkout && (
               <DoctorSlotSelector
                 offers={offers}
                 rawTextMessage={lastRawOfferText}
@@ -426,6 +448,35 @@ export default function ChatPage() {
                 onChangeAppointment={() => handleAction("CHANGE_APPOINTMENT")}
                 onDeclineAppointment={() => handleAction("DECLINE_APPOINTMENT")}
               />
+            )}
+
+            {/* Booked Appointment Confirmation / Restriction Card */}
+            {(hasBookedInSession || (activeAppointment && (offers.length > 0 || livingContext.isCompleted))) && !checkout && (
+              <div className="ml-0 sm:ml-12 rounded-2xl border border-emerald-300 bg-emerald-50/90 p-4 sm:p-5 text-ink-900 shadow-xs">
+                <div className="flex items-start gap-3.5">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-600 text-white font-bold shadow-2xs">
+                    <CalendarCheck size={18} />
+                  </div>
+                  <div className="flex-1 text-xs sm:text-sm">
+                    <h4 className="font-bold text-ink-900 text-sm sm:text-base">
+                      {hasBookedInSession ? "Yêu Cầu Đặt Lịch Đã Được Gửi Tới Lễ Tân Thành Công" : "Bạn Đã Có Lịch Hẹn Đang Được Xử Lý"}
+                    </h4>
+                    <p className="mt-1 text-ink-700 leading-relaxed">
+                      {hasBookedInSession
+                        ? "Hệ thống đã chuyển thông tin tới Quầy Lễ tân để rà soát và cấp số thứ tự ưu tiên cho bạn. Hộp chọn khung giờ đã được đóng lại để bảo đảm tính chính xác."
+                        : `Hệ thống ghi nhận bạn đã có lịch hẹn ${activeAppointment?.appointmentCode ? `(${activeAppointment.appointmentCode})` : ""} cho chuyên khoa ${activeAppointment?.specialtyName || "đã đăng ký"}. Để tránh trùng lặp khung giờ và đảm bảo chất lượng phục vụ, bạn không thể đặt thêm lịch mới lúc này.`}
+                    </p>
+                    <div className="mt-3.5 flex flex-wrap items-center gap-2.5">
+                      <a
+                        href="/bookings"
+                        className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-700 px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-emerald-800 transition-colors"
+                      >
+                        Quản lý và xem tiến độ lịch hẹn →
+                      </a>
+                    </div>
+                  </div>
+                </div>
+              </div>
             )}
 
             {/* Booking Checkout Component */}
@@ -439,6 +490,10 @@ export default function ChatPage() {
                 }}
                 onCompleted={(appointment) => {
                   setCheckout(null);
+                  setOffers([]);
+                  setLastRawOfferText("");
+                  setHasBookedInSession(true);
+                  setActiveAppointment(getActivePatientAppointment());
                   setMessages((current) => [
                     ...current,
                     {
@@ -446,7 +501,11 @@ export default function ChatPage() {
                       sender: "AI",
                       content: `🎉 **Yêu cầu đặt lịch ${
                         appointment.appointmentCode || "APT-2026-CONFIRMED"
-                      } đã được gửi tới Lễ tân thành công!**\n\nLễ tân sẽ duyệt lịch và gửi thông báo xác nhận cho bạn qua tin nhắn / ứng dụng trong thời gian sớm nhất.`,
+                      } đã được gửi tới Lễ tân thành công!**\n\nLễ tân sẽ duyệt lịch và gửi thông báo xác nhận cho bạn qua tin nhắn / ứng dụng trong thời gian sớm nhất. Bạn có thể theo dõi tiến độ duyệt lịch tại trang Quản lý Lịch hẹn.`,
+                      appointmentQr: {
+                        appointmentId: appointment.id,
+                        appointmentCode: appointment.appointmentCode || null,
+                      },
                     },
                   ]);
                 }}
@@ -489,47 +548,7 @@ export default function ChatPage() {
             disabled={isSending || isRestoring || Boolean(emergency)}
           />
         </div>
-
-        {/* Right Column: Compact Living Clinical Context Window - Temporarily hidden per user request */}
-        {/*
-        <LivingContextSidebar
-          context={livingContext}
-          currentStep={currentStep}
-          onForceComplete={handleForceComplete}
-          className="w-72 lg:w-80 shrink-0 hidden md:flex"
-        />
-        */}
       </div>
-
-      {/* Mobile Drawer for Living Context - Temporarily hidden */}
-      {/*
-      {showMobileSidebar && (
-        <div className="fixed inset-0 z-50 flex justify-end bg-black/50 backdrop-blur-xs md:hidden">
-          <div className="relative w-5/6 max-w-xs h-full bg-surface shadow-2xl flex flex-col">
-            <div className="flex items-center justify-between p-3.5 border-b border-line">
-              <h3 className="font-bold text-xs text-ink-900">Hồ Sơ Ngữ Cảnh Sống</h3>
-              <button
-                type="button"
-                onClick={() => setShowMobileSidebar(false)}
-                className="p-1 rounded-full text-ink-500 hover:bg-bg-muted"
-              >
-                <X size={16} />
-              </button>
-            </div>
-            <div className="flex-1 overflow-y-auto">
-              <LivingContextSidebar
-                context={livingContext}
-                currentStep={currentStep}
-                onForceComplete={() => {
-                  handleForceComplete();
-                  setShowMobileSidebar(false);
-                }}
-              />
-            </div>
-          </div>
-        </div>
-      )}
-      */}
     </div>
   );
 }
