@@ -48,3 +48,18 @@ docs/
 *.doc
 *.pptx
 *.pdf
+
+# dataset & raw data files (never commit to git)
+data/
+/data/
+dataset/
+/dataset/
+*.csv
+*.tsv
+*.parquet
+*.jsonl
+*.xlsx
+*.xls
+*.sqlite
+*.sqlite3
+*.db
