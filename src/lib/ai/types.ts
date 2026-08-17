@@ -9,7 +9,9 @@ export type SlotStatus = "PENDING" | "IN_PROGRESS" | "VAGUE" | "COMPLETED";
 
 export type TriageUrgencyLevel = "ROUTINE" | "PRIORITY_LEVEL_2" | "EMERGENCY_115";
 
-export type ClinicalSlotKey = "chiefComplaint" | "characterTriggers" | "duration" | "associatedSigns";
+export type SlotKey = "chiefComplaint" | "characterTriggers" | "duration" | "associatedSigns";
+
+export type JudgeVerdict = "SATISFIED" | "UNSATISFIED";
 
 export interface ContextualChipOption {
   id: string;
@@ -58,6 +60,23 @@ export interface ClinicalSlotMatrix {
   };
 }
 
+export interface JudgeEvaluationResult {
+  targetSlot: SlotKey;
+  verdict: JudgeVerdict;
+  clarityScore: number;
+  extractedFact?: string;
+  reasoning: string;
+  clarificationPrompt?: string;
+  suggestedChips?: ContextualChipOption[];
+}
+
+export interface InterrogatorResult {
+  question: string;
+  chips: ContextualChipOption[];
+  targetSlot: SlotKey;
+  specialtyCode?: string;
+}
+
 export interface LivingClinicalContext {
   sessionId: string;
   turnCount: number;
@@ -67,7 +86,7 @@ export interface LivingClinicalContext {
   urgencyLevel: TriageUrgencyLevel;
   slots: ClinicalSlotMatrix;
   atomicFacts: AtomicClinicalFact[];
-  activeTargetSlot?: ClinicalSlotKey;
+  activeTargetSlot?: SlotKey;
   currentQuestion?: string;
   suggestedChips: ContextualChipOption[];
   detectedSpecialtyCode?: string;
@@ -77,6 +96,7 @@ export interface LivingClinicalContext {
   activeCitations: CitationItem[];
   soothingPayload?: PsychologicalSoothingPayload | null;
   appointmentOffers: AppointmentOffer[];
+  lastJudgeResult?: JudgeEvaluationResult;
 }
 
 export interface PsychologicalSoothingPayload {
@@ -97,31 +117,6 @@ export interface SlotEvaluationResult {
   matchedSpecialtyCode?: string;
   matchedSpecialtyName?: string;
   dynamicClinicalReasoning?: string;
-}
-
-/**
- * Output Contract for LLM 2: Clinical Judge (Thẩm định lâm sàng)
- */
-export interface DualLLMJudgeResult {
-  evaluatedSlot: ClinicalSlotKey;
-  slotStatus: SlotStatus;
-  clarityScore: number;
-  extractedFacts: AtomicClinicalFact[];
-  updatedSlots: ClinicalSlotMatrix;
-  nextSlotToAsk: ClinicalSlotKey | null;
-  matchedSpecialtyCode: string;
-  matchedSpecialtyName: string;
-  isAllCompleted: boolean;
-  isEmergency: boolean;
-  emergencyActionMessage?: string | null;
-  clinicalReasoning: string;
-}
-
-/**
- * Output Contract for LLM 1: Clinical Interrogator (Bác sĩ hỏi định hướng)
- */
-export interface DualLLMInterrogatorResult {
-  doctorReplyText: string;
-  targetSlot: ClinicalSlotKey;
-  suggestedQuickChips: ContextualChipOption[];
+  judgeResult?: JudgeEvaluationResult;
+  activeTargetSlot?: SlotKey;
 }

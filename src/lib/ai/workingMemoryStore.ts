@@ -1,12 +1,11 @@
 /**
  * Fast In-Memory Working Memory Scratchpad (<1ms)
  * Manages conversation state, active clinical slots, RAG matching,
- * provenance audit events, psychology soothing cards, and Dual-LLM Agent pipeline.
+ * provenance audit events, and psychology soothing cards.
  */
 
 import type { LivingClinicalContext } from "./types";
-import { createInitialSlots } from "./clinicalEvaluator";
-import { processDualAgentTurn } from "./dualAgentOrchestrator";
+import { createInitialSlots, evaluateClinicalMessage } from "./clinicalEvaluator";
 import { CLINICAL_SPECIALTIES, generateOffers } from "@/lib/api/chat";
 import { generatePsychologicalSoothing } from "./psychologySpecialist";
 import { recordClinicalEvent } from "./observabilityRecorder";
@@ -42,7 +41,7 @@ export function updateLivingContextWithUserMessage(
 ): { context: LivingClinicalContext; replyText: string } {
   const currentContext = getOrCreateLivingContext(sessionId);
 
-  // 0. AI Safety & Gateway Interceptor
+  // 0. Google Model Armor AI Safety & Gateway Interceptor
   const armorResult = sanitizeUserPromptSync(userMessage);
 
   if (!armorResult.isSafe) {
@@ -52,7 +51,7 @@ export function updateLivingContextWithUserMessage(
       turnNumber: currentContext.turnCount + 1,
       eventType: "PATIENT_MESSAGE_INGESTED",
       component: "ModelArmorShield",
-      summary: `AI Security Guard: Đã phát hiện và chặn đứng truy vấn vi phạm an toàn (${armorResult.violations.map((v) => v.rule).join(", ")})`,
+      summary: `Google Model Armor: Đã phát hiện và chặn đứng truy vấn vi phạm an toàn (${armorResult.violations.map((v) => v.rule).join(", ")})`,
       payload: { rawText: userMessage, blocked: true, violations: armorResult.violations },
       provenanceCheck: { passed: false, allowedAsPatientFact: false },
     });
@@ -65,8 +64,7 @@ export function updateLivingContextWithUserMessage(
     };
   }
 
-  // Dual-Agent Orchestration: LLM 2 (Judge) -> LLM 1 (Interrogator)
-  const evalResult = processDualAgentTurn(userMessage, currentContext);
+  const evalResult = evaluateClinicalMessage(userMessage, currentContext);
 
   currentContext.turnCount += 1;
   currentContext.slots = evalResult.updatedSlots;
@@ -89,24 +87,45 @@ export function updateLivingContextWithUserMessage(
     },
   });
 
-  // Record LLM 2 Judge Decision & Slot Mutation Delta
+  // Record Slot Mutation Delta
   recordClinicalEvent(sessionId, {
     sessionId,
     turnNumber: currentContext.turnCount,
     eventType: "SLOT_STATE_DELTA",
-    component: "ClinicalJudgeAgent",
-    summary: `LLM 2 (Judge) thẩm định: ${evalResult.isAllCompleted ? "Đủ 4/4 slots (100%)" : `Tiến độ ${evalResult.progressPercentage}%`} | Chuyên khoa: ${evalResult.matchedSpecialtyName || "Đang phân loại"}`,
+    component: "FactExtractor",
+    summary: `Cập nhật Slots & Atomic Facts (Tổng: ${evalResult.atomicFacts.length} facts)`,
     payload: {
       slots: evalResult.updatedSlots,
       atomicFacts: evalResult.atomicFacts,
-      progressPercentage: evalResult.progressPercentage,
-      isAllCompleted: evalResult.isAllCompleted,
     },
     provenanceCheck: {
       passed: true,
       allowedAsPatientFact: true,
     },
   });
+
+  // Record Judge LLM Evaluation Event
+  if (evalResult.judgeResult) {
+    currentContext.lastJudgeResult = evalResult.judgeResult;
+    recordClinicalEvent(sessionId, {
+      sessionId,
+      turnNumber: currentContext.turnCount,
+      eventType: "SLOT_STATE_DELTA",
+      component: "ClinicalJudgeLLM",
+      summary: `Judge LLM Thẩm định [${evalResult.judgeResult.targetSlot}]: ${evalResult.judgeResult.verdict === "SATISFIED" ? "ĐẠT CHUẨN ✅" : "CHƯA ĐẠT ⚠️"} (Độ rõ: ${(evalResult.judgeResult.clarityScore * 100).toFixed(0)}%)`,
+      payload: {
+        targetSlot: evalResult.judgeResult.targetSlot,
+        verdict: evalResult.judgeResult.verdict,
+        clarityScore: evalResult.judgeResult.clarityScore,
+        reasoning: evalResult.judgeResult.reasoning,
+        extractedFact: evalResult.judgeResult.extractedFact,
+      },
+      provenanceCheck: {
+        passed: evalResult.judgeResult.verdict === "SATISFIED",
+        allowedAsPatientFact: true,
+      },
+    });
+  }
 
   if (evalResult.isEmergency) {
     currentContext.urgencyLevel = "EMERGENCY_115";
@@ -222,42 +241,41 @@ export function forceCompleteLivingContext(sessionId: string): LivingClinicalCon
   currentContext.progressPercentage = 100;
   currentContext.isCompleted = true;
 
-  // Điền nốt các slot còn thiếu nếu người dùng bấm cưỡng chế hoàn thành
-  if (currentContext.slots.chiefComplaint.status !== "COMPLETED") {
-    currentContext.slots.chiefComplaint.status = "COMPLETED";
-    currentContext.slots.chiefComplaint.value = "Khám sức khỏe & Tư vấn lâm sàng";
-    currentContext.slots.chiefComplaint.clarityScore = 0.8;
-  }
-  if (currentContext.slots.characterTriggers.status !== "COMPLETED") {
-    currentContext.slots.characterTriggers.status = "COMPLETED";
-    currentContext.slots.characterTriggers.value = "Khó chịu mức độ vừa";
-    currentContext.slots.characterTriggers.clarityScore = 0.8;
-  }
-  if (currentContext.slots.duration.status !== "COMPLETED") {
-    currentContext.slots.duration.status = "COMPLETED";
-    currentContext.slots.duration.value = "Gần đây";
-    currentContext.slots.duration.clarityScore = 0.8;
-  }
-  if (currentContext.slots.associatedSigns.status !== "COMPLETED") {
-    currentContext.slots.associatedSigns.status = "COMPLETED";
-    currentContext.slots.associatedSigns.value = "Không có dấu hiệu nguy kịch";
-    currentContext.slots.associatedSigns.clarityScore = 0.8;
-  }
+  const matchedSpec =
+    CLINICAL_SPECIALTIES.find((s) => s.code === currentContext.detectedSpecialtyCode) ||
+    CLINICAL_SPECIALTIES[0];
 
-  const spec = CLINICAL_SPECIALTIES[0];
-  currentContext.detectedSpecialtyCode = spec.code;
-  currentContext.detectedSpecialtyName = spec.name;
-  currentContext.assignedDoctorName = spec.doctor;
-  currentContext.assignedRoom = spec.room;
-  currentContext.activeCitations = spec.citations;
+  currentContext.detectedSpecialtyCode = matchedSpec.code;
+  currentContext.detectedSpecialtyName = matchedSpec.name;
+  currentContext.assignedDoctorName = matchedSpec.doctor;
+  currentContext.assignedRoom = matchedSpec.room;
+  currentContext.activeCitations = matchedSpec.citations;
   currentContext.suggestedChips = [];
-  currentContext.appointmentOffers = generateOffers(spec);
+  currentContext.appointmentOffers = generateOffers(matchedSpec);
   currentContext.soothingPayload = generatePsychologicalSoothing({
-    specialtyCode: spec.code,
-    specialtyName: spec.name,
-    doctorName: spec.doctor,
+    specialtyCode: matchedSpec.code,
+    specialtyName: matchedSpec.name,
+    doctorName: matchedSpec.doctor,
   });
 
   MEMORY_CACHE.set(sessionId, currentContext);
   return currentContext;
+}
+
+export function resetLivingContext(sessionId: string): LivingClinicalContext {
+  const cleanContext: LivingClinicalContext = {
+    sessionId,
+    turnCount: 0,
+    progressPercentage: 0,
+    urgencyLevel: "ROUTINE",
+    slots: createInitialSlots(),
+    atomicFacts: [],
+    activeCitations: [],
+    suggestedChips: [],
+    isEmergency: false,
+    isCompleted: false,
+    appointmentOffers: [],
+  };
+  MEMORY_CACHE.set(sessionId, cleanContext);
+  return cleanContext;
 }

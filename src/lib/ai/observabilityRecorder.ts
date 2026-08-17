@@ -22,7 +22,7 @@ export interface ObservabilityEvent {
   turnNumber: number;
   timestamp: string;
   eventType: ClinicalEventType;
-  component: "FactExtractor" | "SafetyTriageGate" | "RouterEngine" | "RAGVectorPipeline" | "ResponseSynthesizer" | "ModelArmorShield" | "ClinicalJudgeAgent" | "ClinicalInterrogatorAgent";
+  component: "FactExtractor" | "SafetyTriageGate" | "RouterEngine" | "RAGVectorPipeline" | "ResponseSynthesizer" | "ModelArmorShield" | "ClinicalJudgeLLM" | "ClinicalInterrogatorLLM";
   summary: string;
   payload: Record<string, unknown>;
   provenanceCheck?: {

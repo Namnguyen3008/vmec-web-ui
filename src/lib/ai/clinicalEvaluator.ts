@@ -1,8 +1,8 @@
 /**
- * LLM 2: Clinical Evaluator & Dynamic Contextual Chip Generator
- * Enforces strict data provenance: facts MUST come from patient inputs.
- * Anchors routing on Chief Complaint, dynamically creates contextual clarifying questions
- * and generates 100% relevant Quick-Chips based on the patient's exact symptoms.
+ * LLM 2: Clinical Evaluator & Sequential Slot-Gating Engine (2-Stage Architecture)
+ * - Stage 1: Clinical Judge (Thẩm định câu trả lời cho Active Slot: SATISFIED / UNSATISFIED)
+ * - Stage 2: Clinical Interrogator (Hỏi duy nhất 1 câu cho Slot tiếp theo & Sinh 4 Quick-Chips)
+ * Enforces strict sequential interrogation: Chief Complaint -> Character -> Duration -> Associated Signs.
  */
 
 import type {
@@ -11,8 +11,11 @@ import type {
   ContextualChipOption,
   LivingClinicalContext,
   SlotEvaluationResult,
+  SlotKey,
 } from "./types";
 import { CLINICAL_SPECIALTIES, detectEmergency } from "@/lib/api/chat";
+import { evaluateSlotWithJudge, generateInterrogatorResponse, getNextPendingSlot } from "./llmClient";
+import { SLOT_METADATA } from "./prompts";
 
 export function createInitialSlots(): ClinicalSlotMatrix {
   return {
@@ -21,14 +24,14 @@ export function createInitialSlots(): ClinicalSlotMatrix {
       label: "Vị trí & Triệu chứng chính",
       clarityScore: 0,
     },
+    characterTriggers: {
+      status: "PENDING",
+      label: "Tính chất & Cường độ cơn đau",
+      clarityScore: 0,
+    },
     duration: {
       status: "PENDING",
       label: "Thời gian & Diễn tiến",
-      clarityScore: 0,
-    },
-    characterTriggers: {
-      status: "PENDING",
-      label: "Tính chất & Cường độ đau",
       clarityScore: 0,
     },
     associatedSigns: {
@@ -94,7 +97,6 @@ function isPureGreeting(text: string): boolean {
 
 /**
  * Multi-Factor Clinical Specialty Router with Chief Complaint Anchoring
- * Covers all 17 primary specialties and subspecialties in VMEC Master Catalog.
  */
 export function routeSpecialtyWithFactWeights(
   chiefComplaint: string,
@@ -104,49 +106,31 @@ export function routeSpecialtyWithFactWeights(
   const chief = chiefComplaint.toLowerCase();
   const assoc = associatedSigns.toLowerCase();
   const char = characterText.toLowerCase();
-  const combined = `${chief} ${assoc} ${char}`;
 
-  // 1. PEDIATRIC / NHI KHOA (Trẻ em, con, bé, cháu)
   if (chief.includes("cháu") || chief.includes("bé") || chief.includes("con") || chief.includes("trẻ")) {
     return CLINICAL_SPECIALTIES.find((s) => s.code === "NHI_KHOA") || CLINICAL_SPECIALTIES[0];
   }
-
-  // 2. OB/GYN / SẢN PHỤ KHOA (Thai, có bầu, phụ khoa, kinh nguyệt)
   if (chief.includes("thai") || chief.includes("bầu") || chief.includes("phụ khoa") || chief.includes("kinh nguyệt") || chief.includes("chậm kinh")) {
     return CLINICAL_SPECIALTIES.find((s) => s.code === "SAN_PHU_KHOA") || CLINICAL_SPECIALTIES[0];
   }
-
-  // 3. OPHTHALMOLOGY / MẮT
   if (chief.includes("mắt") || chief.includes("nhìn mờ") || chief.includes("thị lực") || chief.includes("đỏ mắt") || chief.includes("cận thị") || chief.includes("cộm")) {
     return CLINICAL_SPECIALTIES.find((s) => s.code === "MAT") || CLINICAL_SPECIALTIES[0];
   }
-
-  // 4. DENTAL / RĂNG HÀM MẶT
   if (chief.includes("răng") || chief.includes("hàm") || chief.includes("lợi") || chief.includes("nướu") || chief.includes("buốt răng") || chief.includes("tủy răng")) {
     return CLINICAL_SPECIALTIES.find((s) => s.code === "RANG_HAM_MAT") || CLINICAL_SPECIALTIES[0];
   }
-
-  // 5. ENT / TAI MŨI HỌNG
   if (chief.includes("tai") || chief.includes("mũi") || chief.includes("xoang") || chief.includes("ù tai") || chief.includes("ngạt mũi") || chief.includes("khàn tiếng") || (chief.includes("họng") && !chief.includes("đầu"))) {
     return CLINICAL_SPECIALTIES.find((s) => s.code === "TAI_MUI_HONG") || CLINICAL_SPECIALTIES[0];
   }
-
-  // 6. DERMATOLOGY / DA LIỄU
   if (chief.includes("da") || chief.includes("ngứa") || chief.includes("mẩn") || chief.includes("mề đay") || chief.includes("mụn") || chief.includes("chàm") || chief.includes("vảy nến")) {
     return CLINICAL_SPECIALTIES.find((s) => s.code === "DA_LIEU") || CLINICAL_SPECIALTIES[0];
   }
-
-  // 7. MUSCULOSKELETAL / CƠ XƯƠNG KHỚP
   if (chief.includes("khớp") || chief.includes("xương") || chief.includes("lưng") || chief.includes("cột sống") || chief.includes("đầu gối") || chief.includes("vai gáy") || chief.includes("gout") || chief.includes("thoái hóa")) {
     return CLINICAL_SPECIALTIES.find((s) => s.code === "CO_XUONG_KHOP") || CLINICAL_SPECIALTIES[0];
   }
-
-  // 8. UROLOGY / THẬN - TIẾT NIỆU
   if (chief.includes("thận") || chief.includes("tiểu buốt") || chief.includes("tiểu rắt") || chief.includes("tiểu ra máu") || chief.includes("sỏi thận") || chief.includes("tiết niệu") || chief.includes("tiểu đêm")) {
     return CLINICAL_SPECIALTIES.find((s) => s.code === "THAN_TIET_NIEU") || CLINICAL_SPECIALTIES[0];
   }
-
-  // 9. ENDOCRINOLOGY / NỘI TIẾT & CHUYỂN HÓA (Mồ hôi, rét run, run tay, tuyến giáp, đái tháo đường)
   if (
     chief.includes("mồ hôi") ||
     chief.includes("rét run") ||
@@ -162,43 +146,28 @@ export function routeSpecialtyWithFactWeights(
   ) {
     return CLINICAL_SPECIALTIES.find((s) => s.code === "NOI_TIET") || CLINICAL_SPECIALTIES[0];
   }
-
-  // 10. PSYCHIATRY / TÂM LÝ - TÂM THẦN
   if (chief.includes("lo âu") || chief.includes("trầm cảm") || chief.includes("stress") || chief.includes("hoảng loạn") || (chief.includes("mất ngủ") && !chief.includes("đầu"))) {
     return CLINICAL_SPECIALTIES.find((s) => s.code === "TAM_THAN_TAM_LY") || CLINICAL_SPECIALTIES[0];
   }
-
-  // 11. INFECTIOUS / TRUYỀN NHIỄM
   if (chief.includes("sốt xuất huyết") || chief.includes("phát ban") || (chief.includes("sốt cao") && !chief.includes("cháu") && !chief.includes("bé"))) {
     return CLINICAL_SPECIALTIES.find((s) => s.code === "TRUYEN_NHIEM") || CLINICAL_SPECIALTIES[0];
   }
-
-  // 12. GERIATRICS / LÃO KHOA
   if (chief.includes("người già") || chief.includes("ông bà") || chief.includes("cao tuổi") || chief.includes("lú lẫn") || chief.includes("sa sút trí tuệ")) {
     return CLINICAL_SPECIALTIES.find((s) => s.code === "LAO_KHOA") || CLINICAL_SPECIALTIES[0];
   }
-
-  // 13. NEUROLOGY / THẦN KINH
   if (chief.includes("đầu") || chief.includes("nhức đầu") || chief.includes("chóng mặt") || chief.includes("tiền đình") || chief.includes("tê bì") || chief.includes("thực vật")) {
     return CLINICAL_SPECIALTIES.find((s) => s.code === "THAN_KINH") || CLINICAL_SPECIALTIES[0];
   }
-
-  // 14. CARDIOLOGY / TIM MẠCH
   if (chief.includes("ngực") || chief.includes("tim") || chief.includes("tức ngực") || chief.includes("hồi hộp") || chief.includes("đánh trống ngực")) {
     return CLINICAL_SPECIALTIES.find((s) => s.code === "TIM_MACH") || CLINICAL_SPECIALTIES[0];
   }
-
-  // 15. GASTROENTEROLOGY / TIÊU HÓA
   if (chief.includes("bụng") || chief.includes("dạ dày") || chief.includes("thượng vị") || chief.includes("ợ chua") || chief.includes("ợ nóng") || chief.includes("nôn") || chief.includes("gan") || chief.includes("mật") || chief.includes("trào ngược")) {
     return CLINICAL_SPECIALTIES.find((s) => s.code === "TIEU_HOA") || CLINICAL_SPECIALTIES[0];
   }
-
-  // 16. PULMONOLOGY / HÔ HẤP
   if (chief.includes("ho") || (chief.includes("thở") && !chief.includes("đầu") && !chief.includes("ngực"))) {
     return CLINICAL_SPECIALTIES.find((s) => s.code === "HO_HAP") || CLINICAL_SPECIALTIES[0];
   }
 
-  // 17. INTERNAL MEDICINE / NỘI TỔNG QUÁT (Mặc định)
   return CLINICAL_SPECIALTIES.find((s) => s.code === "NOI_TONG_QUAT") || CLINICAL_SPECIALTIES[0];
 }
 
@@ -209,8 +178,6 @@ export function generateContextualChipsForSpecialty(
   specialtyCode: string,
   userText: string
 ): { question: string; chips: ContextualChipOption[] } {
-  const lower = userText.toLowerCase();
-
   switch (specialtyCode) {
     case "NOI_TIET":
       return {
@@ -429,99 +396,6 @@ export function generateContextualChipsForSpecialty(
         ],
       };
 
-    case "DA_LIEU":
-      return {
-        question: "Tổn thương trên da của bạn có dạng mẩn đỏ, mụn nước hay bong vảy và có ngứa nhiều không?",
-        chips: [
-          {
-            id: "dl_c1",
-            display: "Nổi mẩn đỏ ngứa thành từng mảng",
-            fullText: "Da tôi bị nổi các mảng sẩn đỏ ngứa ngáy dữ dội, càng gãi càng lan",
-            clinicalCategory: "URTICARIA",
-          },
-          {
-            id: "dl_c2",
-            display: "Da khô nứt nẻ, bong tróc vảy",
-            fullText: "Vùng da tay/chân bị khô ráp nứt nẻ chảy máu và bong tróc vảy",
-            clinicalCategory: "ECZEMA",
-          },
-          {
-            id: "dl_c3",
-            display: "Mụn bọc sưng viêm đỏ vùng mặt/lưng",
-            fullText: "Tôi bị mụn viêm bọc sưng to đau nhức nhiều ở mặt và lưng",
-            clinicalCategory: "ACNE",
-          },
-          {
-            id: "dl_c4",
-            display: "Phát ban đỏ lan nhanh sau dị ứng",
-            fullText: "Tôi bị phát ban đỏ toàn thân ngứa rát sau khi ăn hải sản hoặc uống thuốc",
-            clinicalCategory: "ALLERGY_RASH",
-          },
-        ],
-      };
-
-    case "TAI_MUI_HONG":
-      return {
-        question: "Bạn cảm thấy đau rát họng, ngạt mũi hay ù tai và triệu chứng đã kéo dài bao lâu?",
-        chips: [
-          {
-            id: "tmh_c1",
-            display: "Đau rát buốt họng, nuốt đau",
-            fullText: "Cổ họng tôi đau rát buốt, nuốt nước bọt cũng thấy đau nhói",
-            clinicalCategory: "PHARYNGITIS",
-          },
-          {
-            id: "tmh_c2",
-            display: "Ngạt mũi, chảy dịch đặc, đau xoang",
-            fullText: "Tôi bị ngạt tắc cả hai mũi, chảy dịch đặc và đau nhức vùng trán má",
-            clinicalCategory: "SINUSITIS",
-          },
-          {
-            id: "tmh_c3",
-            display: "Ù tai, cảm giác ve kêu",
-            fullText: "Tai tôi bị ù đặc như có tiếng ve kêu và nghe kém hẳn đi",
-            clinicalCategory: "TINNITUS",
-          },
-          {
-            id: "tmh_c4",
-            display: "Khàn tiếng kéo dài trên 1 tuần",
-            fullText: "Tôi bị khàn tiếng hụt hơi, nói nhanh mệt kéo dài hơn 1 tuần nay",
-            clinicalCategory: "LARYNGITIS",
-          },
-        ],
-      };
-
-    case "THAN_TIET_NIEU":
-      return {
-        question: "Bạn có biểu hiện tiểu buốt, tiểu rắt hay đau tức vùng hông lưng không?",
-        chips: [
-          {
-            id: "ttn_c1",
-            display: "Tiểu buốt rát, tiểu lắt nhắt",
-            fullText: "Tôi đi tiểu có cảm giác buốt rát cuối bãi và buồn tiểu liên tục",
-            clinicalCategory: "UTI",
-          },
-          {
-            id: "ttn_c2",
-            display: "Đau quặn hông lưng lan xuống háng",
-            fullText: "Cơn đau dữ dội từng cơn ở vùng thắt lưng một bên lan xuống háng",
-            clinicalCategory: "RENAL_COLIC",
-          },
-          {
-            id: "ttn_c3",
-            display: "Tiểu đêm nhiều lần, nước tiểu sẫm màu",
-            fullText: "Ban đêm tôi phải dậy đi tiểu 3-4 lần, nước tiểu đục hoặc có bọt",
-            clinicalCategory: "NOCTURIA",
-          },
-          {
-            id: "ttn_c4",
-            display: "Dòng tiểu yếu, phải rặn",
-            fullText: "Tôi đi tiểu thấy dòng nước tiểu yếu, phải rặn và không hết bãi",
-            clinicalCategory: "PROSTATE",
-          },
-        ],
-      };
-
     default:
       return {
         question: "Bạn đang cảm thấy khó chịu cụ thể như thế nào và triệu chứng diễn ra trong bao lâu rồi?",
@@ -556,7 +430,7 @@ export function generateContextualChipsForSpecialty(
 }
 
 /**
- * Dynamic Clinical Reasoning Synthesizer (Strictly from Validated Patient Facts)
+ * Dynamic Clinical Reasoning Synthesizer
  */
 export function synthesizeDynamicReasoning(
   spec: typeof CLINICAL_SPECIALTIES[0],
@@ -592,7 +466,7 @@ export function synthesizeDynamicReasoning(
 }
 
 /**
- * Main Evaluation Function (LLM-as-a-Judge Clinical Slot Evaluator)
+ * Main Sequential 2-Stage Evaluation Function
  */
 export function evaluateClinicalMessage(
   userText: string,
@@ -603,7 +477,7 @@ export function evaluateClinicalMessage(
   const existingFacts: AtomicClinicalFact[] = [...(currentContext.atomicFacts || [])];
   const turnCount = currentContext.turnCount + 1;
 
-  // 0. XỬ LÝ YÊU CẦU BẢO MẬT & API KEY / SYSTEM SECRETS (Security Guard)
+  // 0. XỬ LÝ YÊU CẦU BẢO MẬT & API KEY (Security Guard)
   if (isSecurityOrSystemInquiry(text)) {
     return {
       updatedSlots: slots,
@@ -666,10 +540,11 @@ export function evaluateClinicalMessage(
           clinicalCategory: "GASTRO",
         },
       ],
+      activeTargetSlot: "chiefComplaint",
     };
   }
 
-  // 2. Kiểm tra Cấp cứu 115 độc lập
+  // 2. KIỂM TRA CẤP CỨU 115 ĐỘC LẬP
   const isEmergency = detectEmergency(text);
   if (isEmergency) {
     return {
@@ -683,180 +558,48 @@ export function evaluateClinicalMessage(
     };
   }
 
-  // 3. Bóc tách Atomic Facts & Slots
-  // --- Slot 1: Chief Complaint ---
-  if (slots.chiefComplaint.status !== "COMPLETED") {
-    if (text.includes("mồ hôi") || text.includes("rét run") || text.includes("ớn lạnh") || text.includes("run tay")) {
-      slots.chiefComplaint.status = "COMPLETED";
-      slots.chiefComplaint.value = "Ra mồ hôi tay chân & Rét run";
-      slots.chiefComplaint.clarityScore = 0.95;
-      existingFacts.push({
-        id: `fact_${Date.now()}_1`,
-        category: "CHIEF_COMPLAINT",
-        label: "Triệu chứng chính",
-        value: "Ra mồ hôi tay chân, rét run",
-        rawSnippet: userText.trim(),
-        provenance: "PATIENT_EXPLICIT",
-        sourceTurn: turnCount,
-      });
-    } else if (text.includes("đầu") || text.includes("nhức đầu")) {
-      slots.chiefComplaint.status = "COMPLETED";
-      slots.chiefComplaint.value = "Đau đầu";
-      slots.chiefComplaint.clarityScore = 0.95;
-      existingFacts.push({
-        id: `fact_${Date.now()}_1`,
-        category: "CHIEF_COMPLAINT",
-        label: "Triệu chứng chính",
-        value: "Đau đầu",
-        rawSnippet: userText.trim(),
-        provenance: "PATIENT_EXPLICIT",
-        sourceTurn: turnCount,
-      });
-    } else if (text.includes("ngực") || text.includes("tim")) {
-      slots.chiefComplaint.status = "COMPLETED";
-      slots.chiefComplaint.value = "Đau tức ngực";
-      slots.chiefComplaint.clarityScore = 0.95;
-      existingFacts.push({
-        id: `fact_${Date.now()}_1`,
-        category: "CHIEF_COMPLAINT",
-        label: "Triệu chứng chính",
-        value: "Đau tức ngực",
-        rawSnippet: userText.trim(),
-        provenance: "PATIENT_EXPLICIT",
-        sourceTurn: turnCount,
-      });
-    } else if (text.includes("bụng") || text.includes("dạ dày")) {
-      slots.chiefComplaint.status = "COMPLETED";
-      slots.chiefComplaint.value = "Đau bụng / dạ dày";
-      slots.chiefComplaint.clarityScore = 0.95;
-      existingFacts.push({
-        id: `fact_${Date.now()}_1`,
-        category: "CHIEF_COMPLAINT",
-        label: "Triệu chứng chính",
-        value: "Đau bụng / dạ dày",
-        rawSnippet: userText.trim(),
-        provenance: "PATIENT_EXPLICIT",
-        sourceTurn: turnCount,
-      });
-    } else {
-      // Mọi input người dùng chia sẻ đều được coi là Chief Complaint
-      slots.chiefComplaint.status = "COMPLETED";
-      slots.chiefComplaint.value = userText.trim();
-      slots.chiefComplaint.clarityScore = 0.9;
-      existingFacts.push({
-        id: `fact_${Date.now()}_1`,
-        category: "CHIEF_COMPLAINT",
-        label: "Triệu chứng chính",
-        value: userText.trim(),
-        rawSnippet: userText.trim(),
-        provenance: "PATIENT_EXPLICIT",
-        sourceTurn: turnCount,
-      });
-    }
+  // 3. XÁC ĐỊNH ACTIVE TARGET SLOT HIỆN TẠI TRONG CHUỖI 4 BƯỚC TUẦN TỰ
+  const activeSlot: SlotKey = getNextPendingSlot(slots) || "chiefComplaint";
+
+  // 4. GỌI CLINICAL JUDGE LLM ĐỂ THẨM ĐỊNH ACTIVE SLOT
+  const judgeResult = evaluateSlotWithJudge(activeSlot, userText, slots);
+
+  let nextTargetSlot: SlotKey | null = activeSlot;
+
+  if (judgeResult.verdict === "SATISFIED") {
+    // Đánh dấu slot hiện tại ĐẠT (COMPLETED)
+    slots[activeSlot].status = "COMPLETED";
+    slots[activeSlot].value = judgeResult.extractedFact || userText.trim();
+    slots[activeSlot].clarityScore = judgeResult.clarityScore;
+
+    existingFacts.push({
+      id: `fact_${Date.now()}_${activeSlot}`,
+      category: activeSlot === "chiefComplaint" ? "CHIEF_COMPLAINT" : activeSlot === "characterTriggers" ? "CHARACTER_TRIGGERS" : activeSlot === "duration" ? "DURATION" : "ASSOCIATED_SIGNS",
+      label: SLOT_METADATA[activeSlot].label,
+      value: slots[activeSlot].value || userText.trim(),
+      rawSnippet: userText.trim(),
+      provenance: "PATIENT_EXPLICIT",
+      sourceTurn: turnCount,
+    });
+
+    // Xác định slot kế tiếp cần hỏi
+    nextTargetSlot = getNextPendingSlot(slots);
+  } else {
+    // Chưa đạt: Giữ nguyên slot ở trạng thái IN_PROGRESS / VAGUE
+    slots[activeSlot].status = "IN_PROGRESS";
   }
 
-  // --- Slot 3: Character & Triggers ---
-  if (slots.characterTriggers.status !== "COMPLETED") {
-    if (
-      text.includes("nhói") ||
-      text.includes("dữ dội") ||
-      text.includes("thắt") ||
-      text.includes("rát") ||
-      text.includes("âm ỉ") ||
-      text.includes("quặn") ||
-      text.includes("từng cơn") ||
-      text.includes("liên tục") ||
-      text.includes("thường xuyên") ||
-      text.includes("khi căng thẳng") ||
-      text.includes("khi lo") ||
-      text.includes("khi leo") ||
-      text.includes("gắng sức")
-    ) {
-      slots.characterTriggers.status = "COMPLETED";
-      slots.characterTriggers.value = extractPreservedCharacterText(userText);
-      slots.characterTriggers.clarityScore = 0.95;
-      if (text.includes("dữ dội")) {
-        slots.characterTriggers.severityModifier = "Dữ dội";
-      }
-      existingFacts.push({
-        id: `fact_${Date.now()}_3`,
-        category: "CHARACTER_TRIGGERS",
-        label: "Tính chất & Cường độ",
-        value: slots.characterTriggers.value,
-        rawSnippet: userText.trim(),
-        severity: text.includes("dữ dội") ? "SEVERE" : "MODERATE",
-        provenance: "PATIENT_EXPLICIT",
-        sourceTurn: turnCount,
-      });
-    }
-  }
-
-  // --- Slot 2 & Slot 4: Duration & Associated Signs ---
-  if (
-    text.includes("ngày") ||
-    text.includes("tuần") ||
-    text.includes("tháng") ||
-    text.includes("hôm nay") ||
-    text.includes("sáng nay") ||
-    text.includes("thường xuyên") ||
-    text.includes("lâu nay") ||
-    text.includes("gần đây")
-  ) {
-    if (slots.duration.status !== "COMPLETED") {
-      slots.duration.status = "COMPLETED";
-      slots.duration.value = extractDurationAtom(userText);
-      slots.duration.clarityScore = 0.95;
-      existingFacts.push({
-        id: `fact_${Date.now()}_2`,
-        category: "DURATION",
-        label: "Thời gian diễn tiến",
-        value: slots.duration.value,
-        rawSnippet: userText.trim(),
-        provenance: "PATIENT_EXPLICIT",
-        sourceTurn: turnCount,
-      });
-    }
-  }
-
-  if (
-    text.includes("mệt") ||
-    text.includes("hụt hơi") ||
-    text.includes("khó thở") ||
-    text.includes("buồn nôn") ||
-    text.includes("chóng mặt") ||
-    text.includes("hồi hộp") ||
-    text.includes("run tay") ||
-    text.includes("sốt") ||
-    text.includes("rét run") ||
-    text.includes("không có triệu chứng khác")
-  ) {
-    if (slots.associatedSigns.status !== "COMPLETED") {
-      slots.associatedSigns.status = "COMPLETED";
-      slots.associatedSigns.value = extractAssociatedAtom(userText);
-      slots.associatedSigns.clarityScore = 0.95;
-      existingFacts.push({
-        id: `fact_${Date.now()}_4`,
-        category: "ASSOCIATED_SIGNS",
-        label: "Dấu hiệu kèm theo",
-        value: slots.associatedSigns.value,
-        rawSnippet: userText.trim(),
-        provenance: "PATIENT_EXPLICIT",
-        sourceTurn: turnCount,
-      });
-    }
-  }
-
-  // 4. Tính toán tiến độ
+  // 5. TÍNH TOÁN TIẾN ĐỘ THẨM ĐỊNH (0% -> 25% -> 50% -> 75% -> 100%)
   let completedCount = 0;
   if (slots.chiefComplaint.status === "COMPLETED") completedCount++;
-  if (slots.duration.status === "COMPLETED") completedCount++;
   if (slots.characterTriggers.status === "COMPLETED") completedCount++;
+  if (slots.duration.status === "COMPLETED") completedCount++;
   if (slots.associatedSigns.status === "COMPLETED") completedCount++;
 
-  const isAllCompleted = completedCount >= 4 || (completedCount >= 3 && turnCount >= 2) || turnCount >= 4;
-  const progressPercentage = isAllCompleted ? 100 : Math.min(75, completedCount * 25);
+  const isAllCompleted = completedCount >= 4 || nextTargetSlot === null;
+  const progressPercentage = isAllCompleted ? 100 : completedCount * 25;
 
-  // 5. Định tuyến Chuyên khoa (Weighted by Chief Complaint)
+  // 6. ĐỊNH TUYẾN CHUYÊN KHOA
   const matchedSpec = routeSpecialtyWithFactWeights(
     slots.chiefComplaint.value || userText,
     slots.associatedSigns.value || "",
@@ -865,24 +608,26 @@ export function evaluateClinicalMessage(
 
   const dynamicReasoning = synthesizeDynamicReasoning(matchedSpec, slots, existingFacts);
 
-  // 6. Xây dựng câu hỏi & Gợi ý Contextual Chips động theo đúng chuyên khoa và ngữ cảnh triệu chứng
-  let questionBody = "";
+  // 7. GỌI CLINICAL INTERROGATOR LLM ĐỂ SINH CÂU HỎI & CHIPS CHO SLOT TIẾP THEO
+  let nextQuestion = "";
   let suggestedChips: ContextualChipOption[] = [];
 
   if (isAllCompleted) {
-    questionBody = `Đã tổng hợp đầy đủ thông tin lâm sàng. Đang đối chiếu phác đồ chuyên khoa...`;
+    nextQuestion = `Đã thẩm định hoàn tất 4 thông tin cốt lõi. Đang đối chiếu phác đồ chuyên khoa ${matchedSpec.name}...`;
     suggestedChips = [];
+  } else if (judgeResult.verdict === "UNSATISFIED") {
+    // Hỏi đào sâu làm rõ cho slot hiện tại
+    const ack = buildNaturalDoctorAcknowledgment(slots);
+    nextQuestion = `${ack}${judgeResult.clarificationPrompt || "Bạn có thể chia sẻ cụ thể hơn về thông tin này không?"}`;
+    const interrogator = generateInterrogatorResponse(activeSlot, matchedSpec.code, userText);
+    suggestedChips = interrogator.chips;
   } else {
-    // Luôn sinh Chips bám sát 100% ngữ cảnh chuyên khoa và triệu chứng người dùng vừa nhập
-    const contextData = generateContextualChipsForSpecialty(matchedSpec.code, userText);
-    questionBody = contextData.question;
-    suggestedChips = contextData.chips;
+    // Slot vừa đạt, chuyển sang hỏi slot tiếp theo
+    const ack = buildNaturalDoctorAcknowledgment(slots);
+    const interrogator = generateInterrogatorResponse(nextTargetSlot!, matchedSpec.code, userText);
+    nextQuestion = `${ack}${interrogator.question}`;
+    suggestedChips = interrogator.chips;
   }
-
-  const feedbackAcknowledgment = buildNaturalDoctorAcknowledgment(slots);
-  const nextQuestion = isAllCompleted
-    ? questionBody
-    : `${feedbackAcknowledgment}${questionBody}`;
 
   return {
     updatedSlots: slots,
@@ -895,78 +640,27 @@ export function evaluateClinicalMessage(
     matchedSpecialtyCode: matchedSpec.code,
     matchedSpecialtyName: matchedSpec.name,
     dynamicClinicalReasoning: dynamicReasoning,
+    judgeResult,
+    activeTargetSlot: nextTargetSlot || undefined,
   };
 }
 
 function buildNaturalDoctorAcknowledgment(slots: ClinicalSlotMatrix): string {
   const list: string[] = [];
-  if (slots.chiefComplaint.value) {
+  if (slots.chiefComplaint.value && slots.chiefComplaint.status === "COMPLETED") {
     list.push(`triệu chứng **${slots.chiefComplaint.value}**`);
   }
-  if (slots.characterTriggers.value) {
+  if (slots.characterTriggers.value && slots.characterTriggers.status === "COMPLETED") {
     list.push(`tính chất **${slots.characterTriggers.value}**`);
   }
-  if (slots.duration.value) {
+  if (slots.duration.value && slots.duration.status === "COMPLETED") {
     list.push(`thời gian **${slots.duration.value}**`);
   }
-  if (slots.associatedSigns.value) {
+  if (slots.associatedSigns.value && slots.associatedSigns.status === "COMPLETED") {
     list.push(`dấu hiệu kèm theo **${slots.associatedSigns.value}**`);
   }
 
   if (list.length === 0) return "";
 
-  return `Tôi đã ghi nhận ${list.join(", ")} vào hồ sơ khám của bạn.\n\nĐể hỗ trợ bác sĩ đánh giá chính xác hơn, bạn cho tôi hỏi thêm:\n`;
-}
-
-function extractPreservedCharacterText(text: string): string {
-  const lower = text.toLowerCase();
-  if (lower.includes("thường xuyên") && lower.includes("mồ hôi")) {
-    return "Ra mồ hôi thường xuyên, ẩm ướt";
-  }
-  if (lower.includes("dữ dội") && lower.includes("nhói")) {
-    return "Đau nhói buốt dữ dội từng cơn";
-  }
-  if (lower.includes("thắt") || lower.includes("đè nặng")) {
-    return "Đau thắt, đè nặng khi gắng sức";
-  }
-  if (lower.includes("rát") || lower.includes("bỏng")) {
-    return "Đau nóng rát thượng vị";
-  }
-  if (lower.includes("nhói")) {
-    return "Đau nhói buốt từng cơn";
-  }
-  if (lower.includes("âm ỉ")) {
-    return "Đau âm ỉ liên tục";
-  }
-  if (lower.includes("thường xuyên")) {
-    return "Xuất hiện thường xuyên";
-  }
-  return text.trim();
-}
-
-function extractDurationAtom(text: string): string {
-  const lower = text.toLowerCase();
-  if (lower.includes("3 đến 5 ngày") || lower.includes("3-5 ngày")) return "Khoảng 3 đến 5 ngày nay";
-  if (lower.includes("tuần")) return "Kéo dài nhiều tuần";
-  if (lower.includes("tháng")) return "Diễn tiến nhiều tháng";
-  if (lower.includes("ngày")) return "Khoảng vài ngày gần đây";
-  if (lower.includes("sáng nay") || lower.includes("hôm nay")) return "Mới xuất hiện trong ngày";
-  if (lower.includes("thường xuyên") || lower.includes("lâu nay")) return "Kéo dài thường xuyên";
-  return "Gần đây";
-}
-
-function extractAssociatedAtom(text: string): string {
-  const lower = text.toLowerCase();
-  const symptoms: string[] = [];
-  if (lower.includes("mồ hôi")) symptoms.push("Ra mồ hôi tay chân");
-  if (lower.includes("rét run") || lower.includes("ớn lạnh")) symptoms.push("Rét run / ớn lạnh");
-  if (lower.includes("run tay")) symptoms.push("Run tay");
-  if (lower.includes("hồi hộp")) symptoms.push("Hồi hộp tim đập nhanh");
-  if (lower.includes("mệt")) symptoms.push("Mệt mỏi");
-  if (lower.includes("hụt hơi") || lower.includes("khó thở")) symptoms.push("Hụt hơi / khó thở nhẹ");
-  if (lower.includes("buồn nôn")) symptoms.push("Buồn nôn");
-  if (lower.includes("chóng mặt")) symptoms.push("Chóng mặt");
-  if (lower.includes("sốt")) symptoms.push("Sốt");
-
-  return symptoms.length > 0 ? symptoms.join(", ") : "Không có dấu hiệu nguy kịch kèm theo";
+  return `Bác sĩ đã ghi nhận ${list.join(", ")} vào hồ sơ khám của bạn.\n\n`;
 }
