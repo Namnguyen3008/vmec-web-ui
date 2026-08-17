@@ -40,7 +40,7 @@ export async function login(input: LoginInput): Promise<AuthResult> {
       const isStaff = normalizedEmail.includes("staff") || normalizedEmail.includes("receptionist");
       const role = isDoctor ? "DOCTOR" : (isStaff ? "RECEPTIONIST" : "PATIENT");
       const fullName = isDoctor
-        ? "BS.CKII Trần Minh Đức (Bác sĩ Tim mạch)"
+        ? "Bác sĩ Chuyên khoa (Hội đồng Y khoa VMEC)"
         : (isStaff ? "Lê Thị Thu Thảo (Điều phối Lễ tân)" : "Nguyễn Nam (Bệnh nhân)");
 
       const fallbackResult: AuthResult = {

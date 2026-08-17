@@ -39,9 +39,18 @@ export function BookingCheckout({
         holdToken: context.holdToken,
         patientSnapshot: patient,
         updateProfile,
-        bookingReason: reason,
+        bookingReason: reason || "Đã thu thập đủ triệu chứng qua MedAgent AI.",
         patientNotes: notes,
         chatSessionId: sessionId,
+        doctorId: context.selection.doctorId,
+        doctorName: context.selection.doctorName,
+        specialtyId: context.selection.specialtyId,
+        specialtyName: context.selection.specialtyName,
+        facilityName: context.selection.facilityName,
+        facilityAddress: context.selection.facilityAddress,
+        room: context.selection.room,
+        slotStart: context.selection.slotStart,
+        slotEnd: context.selection.slotEnd,
       }));
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Không thể gửi yêu cầu đặt lịch.");

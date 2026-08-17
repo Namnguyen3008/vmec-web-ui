@@ -511,7 +511,18 @@ export default function ChatPage() {
                     rawTextMessage={lastRawOfferText}
                     isSubmitting={isSending}
                     onSelectOffer={(offer) =>
-                      handleAction("ACCEPT_APPOINTMENT", { slot_id: offer.slotId })
+                      handleAction("ACCEPT_APPOINTMENT", {
+                        slot_id: offer.slotId,
+                        doctor_name: offer.doctorName,
+                        specialty_name: offer.specialtyName,
+                        doctor_id: offer.doctorId,
+                        specialty_id: offer.specialtyId,
+                        facility_name: offer.facilityName,
+                        facility_address: offer.facilityAddress,
+                        room: offer.room,
+                        slot_start: offer.slotStart,
+                        slot_end: offer.slotEnd,
+                      })
                     }
                     onChangeAppointment={() => handleAction("CHANGE_APPOINTMENT")}
                     onDeclineAppointment={() => handleAction("DECLINE_APPOINTMENT")}

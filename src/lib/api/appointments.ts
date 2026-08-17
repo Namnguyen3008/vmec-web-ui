@@ -2,7 +2,7 @@ import { apiRequest } from "@/lib/api/client";
 import type { Appointment, AppointmentQr, CheckoutContext, PatientSnapshot } from "@/lib/api/contracts";
 import { list, mapAppointment, mapCheckout } from "@/lib/api/mappers";
 import { MOCK_DOCTOR_APPOINTMENTS, type DetailedAppointment, type DetailedPatientSnapshot } from "@/lib/mockData";
-import { MASTER_SPECIALTIES, getDoctorById, getSpecialtyByCode } from "@/lib/clinicalMasterCatalog";
+import { MASTER_SPECIALTIES, MASTER_DOCTORS, getDoctorById, getSpecialtyByCode } from "@/lib/clinicalMasterCatalog";
 
 const APPOINTMENTS_STORE_KEY = "vmec.appointments.store";
 
@@ -77,16 +77,17 @@ export function getLocalAppointments(): DetailedAppointment[] {
   }
 }
 
-export function getActivePatientAppointment(): DetailedAppointment | null {
+export function getActivePatientAppointment(patientId: string = "pat_me"): DetailedAppointment | null {
   if (typeof window === "undefined") return null;
   const current = getLocalAppointments();
   return (
     current.find(
       (a) =>
-        a.status === "PENDING_RECEPTIONIST_APPROVAL" ||
-        a.status === "PENDING_PATIENT_CONFIRMATION" ||
-        a.status === "CONFIRMED" ||
-        (a.status as string) === "IN_CONSULTATION"
+        (a.patientId === "pat_me" || a.patientId === "demo_user_patient" || a.patientId === patientId) &&
+        (a.status === "PENDING_RECEPTIONIST_APPROVAL" ||
+          a.status === "PENDING_PATIENT_CONFIRMATION" ||
+          a.status === "CONFIRMED" ||
+          (a.status as string) === "IN_CONSULTATION")
     ) || null
   );
 }
@@ -231,6 +232,15 @@ export async function createAppointment(input: {
   patientSnapshot: PatientSnapshot;
   updateProfile?: boolean;
   chatSessionId?: string;
+  doctorId?: string;
+  doctorName?: string;
+  specialtyId?: string;
+  specialtyName?: string;
+  facilityName?: string;
+  facilityAddress?: string | null;
+  room?: string;
+  slotStart?: string;
+  slotEnd?: string;
 }): Promise<Appointment> {
   try {
     const raw = await apiRequest<unknown>("/api/v1/appointments", {
@@ -257,29 +267,42 @@ export async function createAppointment(input: {
     saveLocalAppointment(mapped);
     return mapped;
   } catch {
-    // Determine doctor and specialty from slotId
-    let specialtyCode = "NOI_TONG_QUAT";
+    // Determine doctor and specialty dynamically
+    let resolvedSpec = MASTER_SPECIALTIES[0];
     for (const spec of MASTER_SPECIALTIES) {
-      if (input.slotId.toUpperCase().includes(spec.code.toUpperCase())) {
-        specialtyCode = spec.code;
+      if (
+        (input.specialtyId && spec.code.toUpperCase() === input.specialtyId.toUpperCase()) ||
+        (input.slotId && input.slotId.toUpperCase().includes(spec.code.toUpperCase())) ||
+        (input.specialtyName && spec.name.toLowerCase().includes(input.specialtyName.toLowerCase()))
+      ) {
+        resolvedSpec = spec;
         break;
       }
     }
-    const spec = getSpecialtyByCode(specialtyCode) || MASTER_SPECIALTIES[0];
-    const doc = spec.doctors[0];
+    const resolvedDoc = resolvedSpec.doctors[0] || MASTER_DOCTORS[0];
+
+    const doctorId = input.doctorId || resolvedDoc.id;
+    const doctorName = input.doctorName || resolvedDoc.fullName;
+    const specialtyId = input.specialtyId || resolvedSpec.code;
+    const specialtyName = input.specialtyName || resolvedSpec.name;
+    const facilityName = input.facilityName || resolvedSpec.facilityName;
+    const facilityAddress = input.facilityAddress || resolvedSpec.facilityAddress;
+    const room = input.room || `${resolvedSpec.room} - ${resolvedSpec.building}`;
+    const slotStart = input.slotStart || new Date(Date.now() + 86400000).toISOString();
+    const slotEnd = input.slotEnd || new Date(Date.now() + 86400000 + 1800000).toISOString();
 
     const newApt: DetailedAppointment = {
       id: `apt_${Date.now()}`,
       appointmentCode: `APT-2026-${Math.floor(1000 + Math.random() * 9000)}`,
       patientId: "pat_me",
-      doctorId: doc.id,
-      doctorName: doc.fullName,
-      specialtyId: spec.code,
-      specialtyName: spec.name,
+      doctorId,
+      doctorName,
+      specialtyId,
+      specialtyName,
       facilityId: "fac_vmec_01",
-      facilityName: spec.facilityName,
-      facilityAddress: spec.facilityAddress,
-      room: `${spec.room} - ${spec.building}`,
+      facilityName,
+      facilityAddress,
+      room,
       scheduleId: input.slotId,
       status: "PENDING_RECEPTIONIST_APPROVAL",
       bookingReason: input.bookingReason || "Tư vấn và khám triệu chứng lâm sàng qua MedAgent AI.",
@@ -293,8 +316,8 @@ export async function createAppointment(input: {
       completedAt: null,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
-      slotStart: new Date(Date.now() + 86400000).toISOString(),
-      slotEnd: new Date(Date.now() + 86400000 + 1800000).toISOString(),
+      slotStart,
+      slotEnd,
       qrAvailable: true,
       patientDetail: {
         fullName: input.patientSnapshot.fullName,
@@ -315,7 +338,7 @@ export async function createAppointment(input: {
           weight: 62,
         },
         aiAssessment: {
-          preliminaryDiagnosis: `${spec.name} - Phân tích AI Triage`,
+          preliminaryDiagnosis: `${specialtyName} - Phân tích AI Triage`,
           urgencyLevel: "ROUTINE",
           confidenceScore: 92,
           reasoning: input.bookingReason || "Đã thu thập đủ triệu chứng qua MedAgent AI.",

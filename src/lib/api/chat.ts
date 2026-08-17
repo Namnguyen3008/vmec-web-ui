@@ -286,9 +286,31 @@ export async function sendChatAction(
       body: { action_type: actionType, payload },
     }));
   } catch {
-    const slotId = String(payload.slot_id || payload.slotId || "slot_TIM_MACH_01");
-    const doctorName = String(payload.doctor_name || payload.doctorName || "BS.CKII Trần Minh Đức");
-    const specialtyName = String(payload.specialty_name || payload.specialtyName || "Khoa Tim Mạch");
+    const slotId = String(payload.slot_id || payload.slotId || "slot_01");
+
+    // Dynamic Specialty & Doctor resolution from slotId or payload
+    let resolvedSpec = MASTER_SPECIALTIES[0];
+    for (const spec of MASTER_SPECIALTIES) {
+      if (
+        slotId.toUpperCase().includes(spec.code.toUpperCase()) ||
+        (payload.specialty_name && String(payload.specialty_name).toLowerCase().includes(spec.name.toLowerCase())) ||
+        (payload.specialty_id && String(payload.specialty_id).toLowerCase() === spec.code.toLowerCase())
+      ) {
+        resolvedSpec = spec;
+        break;
+      }
+    }
+    const resolvedDoc = resolvedSpec.doctors[0] || MASTER_DOCTORS[0];
+
+    const doctorName = String(payload.doctor_name || payload.doctorName || resolvedDoc.fullName);
+    const specialtyName = String(payload.specialty_name || payload.specialtyName || resolvedSpec.name);
+    const doctorId = String(payload.doctor_id || payload.doctorId || resolvedDoc.id);
+    const specialtyId = String(payload.specialty_id || payload.specialtyId || resolvedSpec.code);
+    const facilityName = String(payload.facility_name || payload.facilityName || resolvedSpec.facilityName);
+    const facilityAddress = String(payload.facility_address || payload.facilityAddress || resolvedSpec.facilityAddress);
+    const room = String(payload.room || `${resolvedSpec.room} - ${resolvedSpec.building}`);
+    const slotStart = String(payload.slot_start || payload.slotStart || new Date(Date.now() + 86400000).toISOString());
+    const slotEnd = String(payload.slot_end || payload.slotEnd || new Date(Date.now() + 86400000 + 1800000).toISOString());
 
     return {
       replyText: `Đã xác nhận lựa chọn của bạn với **${doctorName}** (${specialtyName}). Vui lòng kiểm tra lại thông tin và xác nhận giữ chỗ.`,
@@ -307,19 +329,19 @@ export async function sendChatAction(
         },
         selection: {
           slotId,
-          doctorId: "doc_01",
+          doctorId,
           doctorName,
-          specialtyId: "spec_01",
+          specialtyId,
           specialtyName,
-          facilityId: "fac_01",
-          facilityName: "Bệnh viện Đa khoa Quốc tế VMEC",
-          facilityAddress: "123 Nguyễn Trãi, Thanh Xuân, Hà Nội",
-          room: "Phòng 302 - Tầng 3",
-          slotStart: new Date(Date.now() + 86400000).toISOString(),
-          slotEnd: new Date(Date.now() + 86400000 + 1800000).toISOString(),
+          facilityId: "fac_vmec_01",
+          facilityName,
+          facilityAddress,
+          room,
+          slotStart,
+          slotEnd,
         },
         holdExpiresAt: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
-        holdToken: `hold_${Date.now()}`,
+        holdToken: `hold_${slotId}_${Date.now()}`,
       },
     };
   }

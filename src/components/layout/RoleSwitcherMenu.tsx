@@ -18,7 +18,7 @@ export function RoleSwitcherMenu() {
         profile: {
           id: "demo_user_doctor",
           role: "DOCTOR",
-          fullName: "BS.CKII Trần Minh Đức (Bác sĩ Tim mạch)",
+          fullName: "Bác sĩ Chuyên khoa (Hội đồng Y khoa VMEC)",
           phoneNumber: "0912345678",
           avatarUrl: null,
           dateOfBirth: "1980-01-01",
