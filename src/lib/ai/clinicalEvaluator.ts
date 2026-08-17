@@ -554,7 +554,7 @@ export function evaluateClinicalMessage(
       isAllCompleted: false,
       isEmergency: false,
       nextQuestion:
-        "Tôi là **AI Trợ lý Khám bệnh Thông minh (MedAgent)** của Bệnh viện Đa khoa Quốc tế VMEC. Theo chính sách an toàn thông tin và quy chuẩn bảo mật y tế của Bệnh viện, tôi không cung cấp API key, mật khẩu, database credentials hoặc thông tin cấu hình hệ thống.\n\nTôi luôn sẵn sàng lắng nghe và hỗ trợ bạn phân tích các triệu chứng sức khỏe, tư vấn chuyên khoa khám bệnh phù hợp. Nếu bạn đang gặp vấn đề gì về sức khỏe, hãy chia sẻ triệu chứng để tôi hỗ trợ nhé!",
+        "Tôi là **AI Agent Trợ Lý Đặt Lịch Khám & Điều Hướng Chuyên Khoa Thông Minh** của Hệ thống Y tế VMEC. Theo chính sách an toàn thông tin và quy chuẩn bảo mật y tế của Bệnh viện, tôi không cung cấp API key, mật khẩu, database credentials hoặc thông tin cấu hình hệ thống.\n\nTôi luôn sẵn sàng lắng nghe và hỗ trợ bạn phân tích triệu chứng sức khỏe, gợi ý chuyên khoa phù hợp và hỗ trợ đặt lịch khám. Nếu bạn đang gặp vấn đề gì về sức khỏe, hãy chia sẻ triệu chứng để tôi hỗ trợ nhé!",
       suggestedChips: [],
     };
   }
@@ -568,7 +568,7 @@ export function evaluateClinicalMessage(
       isAllCompleted: false,
       isEmergency: false,
       nextQuestion:
-        "Tôi là **AI Trợ lý Y tế & Khám bệnh**, chuyên tiếp nhận triệu chứng và hướng dẫn chuyên khoa khám bệnh tại Bệnh viện. Tôi chỉ có thể hỗ trợ các thông tin liên quan đến y tế và sức khỏe của bạn.\n\nNếu bạn hoặc người thân đang cảm thấy khó chịu hoặc cần khám bệnh, hãy chia sẻ triệu chứng cụ thể để tôi hỗ trợ nhé!",
+        "Tôi là **AI Agent Điều Hướng Chuyên Khoa & Đặt Lịch Khám**, chuyên tiếp nhận triệu chứng, gợi ý chuyên khoa khám bệnh và hỗ trợ đặt lịch tại Hệ thống Y tế VMEC. Tôi chỉ có thể hỗ trợ các thông tin liên quan đến y tế và sức khỏe của bạn.\n\nNếu bạn hoặc người thân đang cảm thấy khó chịu hoặc cần khám bệnh, hãy chia sẻ triệu chứng cụ thể để tôi hỗ trợ nhé!",
       suggestedChips: [],
     };
   }
@@ -581,7 +581,7 @@ export function evaluateClinicalMessage(
       progressPercentage: 0,
       isAllCompleted: false,
       isEmergency: false,
-      nextQuestion: "Chào bạn! Tôi là **AI Trợ lý Khám bệnh Thông minh**. Bạn đang cảm thấy khó chịu ở vị trí nào trong cơ thể (như đau đầu, đau ngực, buồn nôn, đau dạ dày, sốt,...) hoặc cần khám vấn đề sức khỏe gì?",
+      nextQuestion: "Chào bạn! Tôi là **AI Agent Trợ Lý Đặt Lịch Khám & Điều Hướng Chuyên Khoa Thông Minh (VMEC)**. Bạn đang cảm thấy khó chịu ở vị trí nào trong cơ thể (như đau đầu, tức ngực, buồn nôn, đau dạ dày, sốt,...) hoặc có nhu cầu khám chuyên khoa nào?",
       suggestedChips: [
         {
           id: "g_1",

@@ -48,7 +48,7 @@ const INITIAL_WELCOME_MESSAGE: UiMessage = {
   id: "msg_welcome_init",
   sender: "AI",
   content:
-    "Chào bạn! Tôi là **AI Trợ lý Khám bệnh Thông minh**. Hãy chia sẻ về triệu chứng hoặc sự khó chịu bạn đang gặp phải. Tôi sẽ cùng bạn lắng nghe, làm rõ tình trạng và định hướng chuyên khoa chính xác nhất.",
+    "Chào bạn! Tôi là **AI Agent Trợ Lý Đặt Lịch Khám & Điều Hướng Chuyên Khoa Thông Minh (VMEC)**. Hãy chia sẻ về triệu chứng hoặc nhu cầu khám bệnh bạn đang gặp phải. Tôi sẽ cùng bạn lắng nghe, làm rõ tình trạng, gợi ý chuyên khoa phù hợp và hỗ trợ giữ chỗ đặt lịch khám nhanh chóng.",
 };
 
 function toUiMessage(message: ChatMessage): UiMessage {
@@ -344,10 +344,10 @@ export default function ChatPage() {
           </div>
           <div>
             <h1 className="text-xs sm:text-sm font-bold text-ink-900 leading-none">
-              Trợ Lý Khám Bệnh AI (MedAgent)
+              AI Agent Trợ Lý Đặt Lịch Khám & Điều Hướng Chuyên Khoa
             </h1>
             <p className="text-[10px] text-ink-500 mt-0.5">
-              Hội chẩn định tuyến & giữ chỗ khám theo chuẩn Bộ Y Tế
+              Tiếp nhận triệu chứng, gợi ý chuyên khoa & giữ chỗ khám theo chuẩn Bộ Y Tế
             </p>
           </div>
         </div>
