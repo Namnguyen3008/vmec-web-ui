@@ -57,9 +57,18 @@ dataset/
 *.csv
 *.tsv
 *.parquet
-*.jsonl
-*.xlsx
-*.xls
 *.sqlite
 *.sqlite3
 *.db
+
+# python backend
+backend/.venv/
+backend/.env
+backend/.env.*
+!backend/.env.example
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.ruff_cache/
+.coverage

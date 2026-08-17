@@ -1,0 +1,69 @@
+services:
+  - type: web
+    name: vmec-api
+    runtime: docker
+    dockerfilePath: backend/Dockerfile
+    dockerContext: backend
+    plan: free
+    region: singapore
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: APP_NAME
+        value: "VMEC Dedicated Cloud Backend"
+      - key: APP_ENV
+        value: "production"
+      - key: APP_PORT
+        value: "8000"
+      - key: CORS_ORIGINS
+        value: "*"
+      - key: AZURE_COSMOS_ENDPOINT
+        sync: false
+      - key: AZURE_COSMOS_KEY
+        sync: false
+      - key: AZURE_COSMOS_DATABASE_NAME
+        value: "vmec_healthcare_db"
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY_2
+        sync: false
+      - key: GEMINI_API_KEY_3
+        sync: false
+      - key: GEMINI_API_KEY_4
+        sync: false
+      - key: GEMINI_API_KEY_5
+        sync: false
+      - key: GEMINI_API_KEY_6
+        sync: false
+      - key: GEMINI_API_KEY_7
+        sync: false
+      - key: MISTRAL_API_KEY
+        sync: false
+      - key: MISTRAL_API_KEY_2
+        sync: false
+      - key: MISTRAL_API_KEY_3
+        sync: false
+      - key: MISTRAL_API_KEY_4
+        sync: false
+      - key: MISTRAL_API_KEY_5
+        sync: false
+      - key: MISTRAL_API_KEY_6
+        sync: false
+      - key: MISTRAL_API_KEY_7
+        sync: false
+      - key: MISTRAL_API_KEY_8
+        sync: false
+      - key: MISTRAL_API_KEY_9
+        sync: false
+      - key: MISTRAL_API_KEY_10
+        sync: false
+      - key: MISTRAL_API_KEY_11
+        sync: false
+      - key: MISTRAL_API_KEY_12
+        sync: false
+      - key: MISTRAL_API_KEY_13
+        sync: false
