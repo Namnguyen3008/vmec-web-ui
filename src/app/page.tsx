@@ -49,19 +49,19 @@ export default function LandingPage() {
     <div className="bg-bg">
       <NavBar />
 
-      {/* Hero Section with Soft Blurred Gemini Hospital Architecture Background */}
-      <section className="relative overflow-hidden border-b border-line bg-gradient-to-b from-teal-50/40 via-white to-white py-16 sm:py-24">
-        {/* Background Image Layer with Blur and Subtle Opacity */}
+      {/* Hero Section with Clearer Gemini Hospital Architecture Background */}
+      <section className="relative overflow-hidden border-b border-line bg-gradient-to-b from-teal-50/20 via-white/80 to-white py-16 sm:py-24">
+        {/* Background Image Layer - Clear, Vibrant and High Resolution */}
         <div
-          className="absolute inset-0 pointer-events-none z-0 bg-cover bg-center opacity-[0.16] mix-blend-multiply scale-105 filter blur-[2px]"
+          className="absolute inset-0 pointer-events-none z-0 bg-cover bg-center opacity-[0.36] transition-opacity duration-300"
           style={{
             backgroundImage: "url('/images/vmec_hero_bg.jpg')",
           }}
           aria-hidden="true"
         />
-        {/* Soft Gradient Overlay for Optimal Contrast & Readability */}
+        {/* Soft Contrast Gradient Mask for Text Legibility */}
         <div
-          className="absolute inset-0 pointer-events-none z-0 bg-gradient-to-r from-white/95 via-white/80 to-transparent"
+          className="absolute inset-0 pointer-events-none z-0 bg-gradient-to-r from-white/90 via-white/60 to-white/20"
           aria-hidden="true"
         />
 
