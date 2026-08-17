@@ -26,12 +26,25 @@ export function LoginForm({
 
   async function performLogin(loginEmail: string, loginPass: string) {
     setError(null);
+    const normalized = loginEmail.toLowerCase().trim();
+    if (
+      normalized.includes("doctor") ||
+      normalized.includes("staff") ||
+      normalized.includes("letan") ||
+      normalized.includes("bacsi")
+    ) {
+      setError("🔒 Cổng truy cập Bác sĩ & Lễ tân hiện đang tạm khóa bảo trì. Vui lòng đăng nhập với vai trò Bệnh nhân.");
+      setIsSubmitting(false);
+      setLoggingRole(null);
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       const result = await login({ email: loginEmail, password: loginPass });
-      if (result.profile.role === "ADMIN") {
+      if (result.profile.role === "ADMIN" || result.profile.role === "DOCTOR" || result.profile.role === "RECEPTIONIST") {
         clearAuthSession();
-        setError("Cổng quản trị chưa được triển khai. Vui lòng dùng tài khoản bệnh nhân, bác sĩ hoặc lễ tân.");
+        setError("🔒 Cổng truy cập Bác sĩ & Lễ tân hiện đang tạm khóa bảo trì. Vui lòng sử dụng cổng Bệnh nhân.");
         setIsSubmitting(false);
         setLoggingRole(null);
         return;
@@ -50,6 +63,10 @@ export function LoginForm({
   }
 
   async function handleQuickLogin(targetRole: string, targetEmail: string, targetPass: string) {
+    if (targetRole === "DOCTOR" || targetRole === "RECEPTIONIST") {
+      setError("🔒 Phân hệ này hiện đang tạm thời khóa truy cập để bảo trì.");
+      return;
+    }
     setLoggingRole(targetRole);
     setEmail(targetEmail);
     setPassword(targetPass);
@@ -70,6 +87,7 @@ export function LoginForm({
           <span className="text-[11px] font-normal text-teal-700">Tự động vào đúng phân hệ</span>
         </p>
         <div className="grid grid-cols-3 gap-2">
+          {/* Bệnh nhân - Hoạt động bình thường */}
           <button
             type="button"
             disabled={isSubmitting}
@@ -84,33 +102,45 @@ export function LoginForm({
             <span className="mt-1 text-teal-950 font-bold">Bệnh nhân</span>
           </button>
 
-          <button
-            type="button"
-            disabled={isSubmitting}
-            onClick={() => handleQuickLogin("DOCTOR", "doctor@vmec.vn", "VmecHealthcare@2026!")}
-            className="flex flex-col items-center justify-center rounded-xl border border-teal-300 bg-surface p-2.5 text-center text-xs font-semibold text-ink-900 transition hover:border-primary-500 hover:bg-primary-50 hover:shadow-xs active:scale-95 disabled:opacity-60"
-          >
-            {loggingRole === "DOCTOR" ? (
-              <Loader2 size={20} className="animate-spin text-teal-700 my-0.5" />
-            ) : (
-              <Stethoscope size={20} className="text-teal-700 my-0.5" />
-            )}
-            <span className="mt-1 text-teal-950 font-bold">Bác sĩ</span>
-          </button>
+          {/* Bác sĩ - Tạm khóa truy cập */}
+          <div className="relative group">
+            <button
+              type="button"
+              disabled={true}
+              className="w-full flex flex-col items-center justify-center rounded-xl border border-slate-300 bg-slate-100/90 p-2.5 text-center text-xs font-semibold text-slate-400 cursor-not-allowed opacity-75"
+              title="Phân hệ Bác sĩ tạm khóa truy cập"
+            >
+              <div className="relative">
+                <Stethoscope size={20} className="text-slate-400 my-0.5" />
+                <span className="absolute -bottom-1 -right-1 bg-amber-500 text-white rounded-full p-0.5 shadow-xs">
+                  <Lock size={10} />
+                </span>
+              </div>
+              <span className="mt-1 text-slate-600 font-bold flex items-center gap-1">
+                Bác sĩ <Lock size={11} className="text-amber-600" />
+              </span>
+            </button>
+          </div>
 
-          <button
-            type="button"
-            disabled={isSubmitting}
-            onClick={() => handleQuickLogin("RECEPTIONIST", "staff@vmec.vn", "VmecHealthcare@2026!")}
-            className="flex flex-col items-center justify-center rounded-xl border border-teal-300 bg-surface p-2.5 text-center text-xs font-semibold text-ink-900 transition hover:border-primary-500 hover:bg-primary-50 hover:shadow-xs active:scale-95 disabled:opacity-60"
-          >
-            {loggingRole === "RECEPTIONIST" ? (
-              <Loader2 size={20} className="animate-spin text-teal-700 my-0.5" />
-            ) : (
-              <UserCheck size={20} className="text-teal-700 my-0.5" />
-            )}
-            <span className="mt-1 text-teal-950 font-bold">Lễ tân</span>
-          </button>
+          {/* Lễ tân - Tạm khóa truy cập */}
+          <div className="relative group">
+            <button
+              type="button"
+              disabled={true}
+              className="w-full flex flex-col items-center justify-center rounded-xl border border-slate-300 bg-slate-100/90 p-2.5 text-center text-xs font-semibold text-slate-400 cursor-not-allowed opacity-75"
+              title="Phân hệ Lễ tân tạm khóa truy cập"
+            >
+              <div className="relative">
+                <UserCheck size={20} className="text-slate-400 my-0.5" />
+                <span className="absolute -bottom-1 -right-1 bg-amber-500 text-white rounded-full p-0.5 shadow-xs">
+                  <Lock size={10} />
+                </span>
+              </div>
+              <span className="mt-1 text-slate-600 font-bold flex items-center gap-1">
+                Lễ tân <Lock size={11} className="text-amber-600" />
+              </span>
+            </button>
+          </div>
         </div>
       </div>
 
