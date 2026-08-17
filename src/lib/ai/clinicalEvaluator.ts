@@ -685,14 +685,14 @@ export function evaluateClinicalMessage(
     nextQuestion = `Đã thẩm định hoàn tất 4 thông tin cốt lõi. Đang đối chiếu phác đồ chuyên khoa ${matchedSpec.name}...`;
     suggestedChips = [];
   } else if (judgeResult.verdict === "UNSATISFIED") {
-    const ack = buildNaturalDoctorAcknowledgment(slots);
-    nextQuestion = `${ack}${judgeResult.clarificationPrompt || "Bạn có thể chia sẻ cụ thể hơn về thông tin này không?"}`;
+    const empathy = buildNaturalDoctorEmpathy(slots.chiefComplaint.value || userText);
+    nextQuestion = `${empathy} ${judgeResult.clarificationPrompt || "Bạn có thể chia sẻ cụ thể hơn về thông tin này không?"}`;
     const interrogator = generateInterrogatorResponse(activeSlot, matchedSpec.code, userText);
     suggestedChips = interrogator.chips;
   } else {
-    const ack = buildNaturalDoctorAcknowledgment(slots);
+    const empathy = buildNaturalDoctorEmpathy(slots.chiefComplaint.value || userText);
     const interrogator = generateInterrogatorResponse(nextTargetSlot!, matchedSpec.code, userText);
-    nextQuestion = `${ack}${interrogator.question}`;
+    nextQuestion = `${empathy} ${interrogator.question}`;
     suggestedChips = interrogator.chips;
   }
 
@@ -804,16 +804,14 @@ export async function evaluateClinicalMessageAsync(
     nextQuestion = `Đã thẩm định hoàn tất 4 thông tin cốt lõi. Đang đối chiếu phác đồ chuyên khoa ${matchedSpec.name}...`;
     suggestedChips = [];
   } else if (judgeResult.verdict === "UNSATISFIED") {
-    const ack = buildNaturalDoctorAcknowledgment(slots);
     const interrogator = await callInterrogatorLLMRemote(activeSlot, matchedSpec.code, matchedSpec.name, slots, userText) ||
                          generateInterrogatorResponse(activeSlot, matchedSpec.code, userText);
-    nextQuestion = `${ack}${judgeResult.clarificationPrompt || interrogator.question}`;
+    nextQuestion = judgeResult.clarificationPrompt || interrogator.question;
     suggestedChips = interrogator.chips;
   } else {
-    const ack = buildNaturalDoctorAcknowledgment(slots);
     const interrogator = await callInterrogatorLLMRemote(nextTargetSlot!, matchedSpec.code, matchedSpec.name, slots, userText) ||
                          generateInterrogatorResponse(nextTargetSlot!, matchedSpec.code, userText);
-    nextQuestion = `${ack}${interrogator.question}`;
+    nextQuestion = interrogator.question;
     suggestedChips = interrogator.chips;
   }
 
@@ -833,22 +831,17 @@ export async function evaluateClinicalMessageAsync(
   };
 }
 
-function buildNaturalDoctorAcknowledgment(slots: ClinicalSlotMatrix): string {
-  const list: string[] = [];
-  if (slots.chiefComplaint.value && slots.chiefComplaint.status === "COMPLETED") {
-    list.push(`triệu chứng **${slots.chiefComplaint.value}**`);
+export function buildNaturalDoctorEmpathy(symptom: string): string {
+  const sym = cleanSymptomText(symptom);
+  if (!sym) return "Tôi hiểu bạn đang cảm thấy khó chịu trong người.";
+  if (sym.includes("đau") || sym.includes("buốt") || sym.includes("nhức")) {
+    return `Tôi hiểu cảm giác ${sym} này đang gây nhiều khó chịu và bất tiện cho bạn.`;
   }
-  if (slots.characterTriggers.value && slots.characterTriggers.status === "COMPLETED") {
-    list.push(`tính chất **${slots.characterTriggers.value}**`);
+  if (sym.includes("mệt") || sym.includes("hụt hơi") || sym.includes("khó thở")) {
+    return `Tình trạng ${sym} này chắc hẳn khiến bạn cảm thấy mệt mỏi và lo lắng.`;
   }
-  if (slots.duration.value && slots.duration.status === "COMPLETED") {
-    list.push(`thời gian **${slots.duration.value}**`);
+  if (sym.includes("buồn nôn") || sym.includes("nôn")) {
+    return `Cảm giác ${sym} này khiến bạn rất khó chịu trong người, bạn hãy ngồi nghỉ và hít thở sâu nhé.`;
   }
-  if (slots.associatedSigns.value && slots.associatedSigns.status === "COMPLETED") {
-    list.push(`dấu hiệu kèm theo **${slots.associatedSigns.value}**`);
-  }
-
-  if (list.length === 0) return "";
-
-  return `Bác sĩ đã ghi nhận ${list.join(", ")} vào hồ sơ khám của bạn.\n\n`;
+  return `Tôi rất chia sẻ với tình trạng ${sym} mà bạn đang gặp phải.`;
 }

@@ -125,10 +125,13 @@ export async function POST(req: NextRequest) {
       if (llmResult) {
         try {
           const parsed = JSON.parse(llmResult.text);
-          if (parsed.question && Array.isArray(parsed.chips) && parsed.chips.length >= 2) {
+          if ((parsed.fullResponse || parsed.question) && Array.isArray(parsed.chips) && parsed.chips.length >= 2) {
             return NextResponse.json({
               success: true,
-              result: parsed,
+              result: {
+                question: parsed.fullResponse || parsed.question,
+                chips: parsed.chips,
+              },
               model: llmResult.model,
               keyIndex: llmResult.keyUsed,
               source: "GEMINI_LIVE_API",
