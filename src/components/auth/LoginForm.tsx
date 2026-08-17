@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Mail, Lock, Eye, EyeOff, ArrowRight, CalendarClock } from "lucide-react";
+import { Mail, Lock, Eye, EyeOff, ArrowRight, CalendarClock, Loader2, Stethoscope, UserCheck, User } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { ApiError } from "@/lib/api/client";
 import { login } from "@/lib/api/auth";
@@ -22,34 +22,106 @@ export function LoginForm({
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [loggingRole, setLoggingRole] = useState<string | null>(null);
 
-  async function handleSubmit() {
+  async function performLogin(loginEmail: string, loginPass: string) {
     setError(null);
     setIsSubmitting(true);
     try {
-      const result = await login({ email, password });
+      const result = await login({ email: loginEmail, password: loginPass });
       if (result.profile.role === "ADMIN") {
         clearAuthSession();
         setError("Cổng quản trị chưa được triển khai. Vui lòng dùng tài khoản bệnh nhân, bác sĩ hoặc lễ tân.");
+        setIsSubmitting(false);
+        setLoggingRole(null);
         return;
       }
-      router.replace(homeForRole(result.profile.role));
+      // Điều hướng tuyệt đối để làm mới toàn bộ bộ nhớ và nạp chunk sạch sẽ
+      window.location.href = homeForRole(result.profile.role);
     } catch (cause) {
       setError(cause instanceof ApiError ? cause.message : "Đăng nhập không thành công.");
-    } finally {
       setIsSubmitting(false);
+      setLoggingRole(null);
     }
+  }
+
+  async function handleSubmit() {
+    await performLogin(email, password);
+  }
+
+  async function handleQuickLogin(targetRole: string, targetEmail: string, targetPass: string) {
+    setLoggingRole(targetRole);
+    setEmail(targetEmail);
+    setPassword(targetPass);
+    await performLogin(targetEmail, targetPass);
   }
 
   return (
     <div className="w-full max-w-md rounded-card-lg border border-line bg-surface p-8 shadow-sm">
-      <h2 className="text-h2 font-bold text-primary-900">Đăng nhập</h2>
+      <h2 className="text-h2 font-bold text-primary-900">Đăng nhập Hệ thống VMEC</h2>
       <p className="mt-1 text-body text-ink-700">
-        Chào mừng bạn trở lại! Vui lòng đăng nhập để tiếp tục.
+        Đăng nhập vào cổng dịch vụ y tế Bệnh viện Đa khoa Quốc tế.
       </p>
 
+      {/* Quick 1-Click Role Login Buttons */}
+      <div className="mt-5 rounded-2xl bg-teal-50/50 border border-teal-200 p-3.5">
+        <p className="text-caption font-bold uppercase tracking-wider text-teal-950 mb-2.5 flex items-center justify-between">
+          <span>⚡ Đăng nhập nhanh 1-Click:</span>
+          <span className="text-[11px] font-normal text-teal-700">Tự động vào đúng phân hệ</span>
+        </p>
+        <div className="grid grid-cols-3 gap-2">
+          <button
+            type="button"
+            disabled={isSubmitting}
+            onClick={() => handleQuickLogin("PATIENT", "namnguyen3008@vmec.vn", "VmecHealthcare@2026!")}
+            className="flex flex-col items-center justify-center rounded-xl border border-teal-300 bg-surface p-2.5 text-center text-xs font-semibold text-ink-900 transition hover:border-primary-500 hover:bg-primary-50 hover:shadow-xs active:scale-95 disabled:opacity-60"
+          >
+            {loggingRole === "PATIENT" ? (
+              <Loader2 size={20} className="animate-spin text-teal-700 my-0.5" />
+            ) : (
+              <User size={20} className="text-teal-700 my-0.5" />
+            )}
+            <span className="mt-1 text-teal-950 font-bold">Bệnh nhân</span>
+          </button>
+
+          <button
+            type="button"
+            disabled={isSubmitting}
+            onClick={() => handleQuickLogin("DOCTOR", "doctor@vmec.vn", "VmecHealthcare@2026!")}
+            className="flex flex-col items-center justify-center rounded-xl border border-teal-300 bg-surface p-2.5 text-center text-xs font-semibold text-ink-900 transition hover:border-primary-500 hover:bg-primary-50 hover:shadow-xs active:scale-95 disabled:opacity-60"
+          >
+            {loggingRole === "DOCTOR" ? (
+              <Loader2 size={20} className="animate-spin text-teal-700 my-0.5" />
+            ) : (
+              <Stethoscope size={20} className="text-teal-700 my-0.5" />
+            )}
+            <span className="mt-1 text-teal-950 font-bold">Bác sĩ</span>
+          </button>
+
+          <button
+            type="button"
+            disabled={isSubmitting}
+            onClick={() => handleQuickLogin("RECEPTIONIST", "staff@vmec.vn", "VmecHealthcare@2026!")}
+            className="flex flex-col items-center justify-center rounded-xl border border-teal-300 bg-surface p-2.5 text-center text-xs font-semibold text-ink-900 transition hover:border-primary-500 hover:bg-primary-50 hover:shadow-xs active:scale-95 disabled:opacity-60"
+          >
+            {loggingRole === "RECEPTIONIST" ? (
+              <Loader2 size={20} className="animate-spin text-teal-700 my-0.5" />
+            ) : (
+              <UserCheck size={20} className="text-teal-700 my-0.5" />
+            )}
+            <span className="mt-1 text-teal-950 font-bold">Lễ tân</span>
+          </button>
+        </div>
+      </div>
+
+      <div className="my-5 flex items-center gap-4 text-caption text-ink-500">
+        <span className="h-px flex-1 bg-line" />
+        hoặc nhập thông tin đăng nhập
+        <span className="h-px flex-1 bg-line" />
+      </div>
+
       <form
-        className="mt-6 space-y-4"
+        className="space-y-4"
         onSubmit={(event) => {
           event.preventDefault();
           void handleSubmit();
@@ -63,7 +135,7 @@ export function LoginForm({
             onChange={(event) => setEmail(event.target.value)}
             required
             autoComplete="email"
-            placeholder="Email"
+            placeholder="Email (VD: doctor@vmec.vn, staff@vmec.vn...)"
             className="w-full rounded-xl border border-line bg-surface py-3.5 pl-11 pr-4 text-body outline-none focus:border-primary-400"
           />
         </div>
@@ -89,12 +161,6 @@ export function LoginForm({
           </button>
         </div>
 
-        <div className="text-right">
-          <Link href="#" className="text-body font-semibold text-primary-700 hover:underline">
-            Quên mật khẩu?
-          </Link>
-        </div>
-
         {error && (
           <p role="alert" className="rounded-xl bg-danger-soft px-4 py-3 text-body text-danger">
             {error}
@@ -105,60 +171,16 @@ export function LoginForm({
           type="submit"
           size="lg"
           className="w-full"
-          icon={<ArrowRight size={18} />}
+          icon={isSubmitting ? <Loader2 size={18} className="animate-spin" /> : <ArrowRight size={18} />}
           disabled={isSubmitting}
         >
-          {isSubmitting ? "Đang đăng nhập..." : "Đăng nhập"}
+          {isSubmitting ? "Đang xử lý đăng nhập..." : "Đăng nhập"}
         </Button>
       </form>
 
-      <div className="my-6 flex items-center gap-4 text-caption text-ink-500">
+      <div className="my-5 flex items-center gap-4 text-caption text-ink-500">
         <span className="h-px flex-1 bg-line" />
-        Tài khoản mẫu đăng nhập nhanh
-        <span className="h-px flex-1 bg-line" />
-      </div>
-
-      <div className="grid grid-cols-3 gap-2">
-        <button
-          type="button"
-          onClick={() => {
-            setEmail("namnguyen3008@vmec.vn");
-            setPassword("VmecHealthcare@2026!");
-          }}
-          className="flex flex-col items-center justify-center rounded-xl border border-line bg-surface p-2.5 text-center text-xs font-semibold text-ink-900 transition-colors hover:border-primary-500 hover:bg-primary-50"
-        >
-          <span className="text-base">👤</span>
-          <span className="mt-1 text-primary-900">Bệnh nhân</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => {
-            setEmail("doctor@vmec.vn");
-            setPassword("VmecHealthcare@2026!");
-          }}
-          className="flex flex-col items-center justify-center rounded-xl border border-line bg-surface p-2.5 text-center text-xs font-semibold text-ink-900 transition-colors hover:border-primary-500 hover:bg-primary-50"
-        >
-          <span className="text-base">👨‍⚕️</span>
-          <span className="mt-1 text-primary-900">Bác sĩ</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => {
-            setEmail("staff@vmec.vn");
-            setPassword("VmecHealthcare@2026!");
-          }}
-          className="flex flex-col items-center justify-center rounded-xl border border-line bg-surface p-2.5 text-center text-xs font-semibold text-ink-900 transition-colors hover:border-primary-500 hover:bg-primary-50"
-        >
-          <span className="text-base">👩‍💼</span>
-          <span className="mt-1 text-primary-900">Lễ tân</span>
-        </button>
-      </div>
-
-      <div className="my-6 flex items-center gap-4 text-caption text-ink-500">
-        <span className="h-px flex-1 bg-line" />
-        Hoặc đăng nhập với Google
+        hoặc liên kết
         <span className="h-px flex-1 bg-line" />
       </div>
 
@@ -174,9 +196,9 @@ export function LoginForm({
         </Link>
       </p>
 
-      <p className="mt-2 flex items-center gap-1.5 text-caption text-ink-500">
-        <CalendarClock size={14} className="shrink-0" />
-        Mật khẩu mẫu chung: <code className="font-mono text-primary-700">VmecHealthcare@2026!</code>
+      <p className="mt-2 flex items-center justify-center gap-1.5 text-caption text-ink-500 text-center">
+        <CalendarClock size={14} className="shrink-0 text-teal-700" />
+        Mật khẩu chung demo: <code className="font-mono font-semibold text-teal-900">VmecHealthcare@2026!</code>
       </p>
     </div>
   );

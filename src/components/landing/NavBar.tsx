@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Logo } from "@/components/ui/Logo";
 import { Button } from "@/components/ui/Button";
+import { RoleSwitcherMenu } from "@/components/layout/RoleSwitcherMenu";
 
 const links = [
   { label: "Dịch vụ", href: "#services" },
@@ -23,9 +24,12 @@ export function NavBar() {
             </a>
           ))}
         </nav>
-        <Button href="/login" size="md">
-          Đăng nhập
-        </Button>
+        <div className="flex items-center gap-3">
+          <RoleSwitcherMenu />
+          <Button href="/login" size="md">
+            Đăng nhập
+          </Button>
+        </div>
       </div>
     </header>
   );

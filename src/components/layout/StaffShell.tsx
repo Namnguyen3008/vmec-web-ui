@@ -21,6 +21,7 @@ import { Logo } from "@/components/ui/Logo";
 import { LogoutButton } from "@/components/auth/LogoutButton";
 import { useCurrentSession } from "@/lib/auth/useCurrentSession";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
+import { RoleSwitcherMenu } from "@/components/layout/RoleSwitcherMenu";
 
 const navItems = [
   { label: "Phê duyệt (AI)", href: "/approvals", icon: CalendarCheck },
@@ -104,6 +105,7 @@ export function StaffShell({
         <header className="flex items-center justify-between gap-6 border-b border-line bg-surface px-8 py-4">
           <h1 className="text-h3 font-bold text-primary-900">{title}</h1>
           <div className="flex items-center gap-4 text-ink-700">
+            <RoleSwitcherMenu />
             <NotificationBell />
             <Mail size={20} />
             <UserCircle size={24} />

@@ -7,6 +7,7 @@ import { Logo } from "@/components/ui/Logo";
 import { LogoutButton } from "@/components/auth/LogoutButton";
 import { useCurrentSession } from "@/lib/auth/useCurrentSession";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
+import { RoleSwitcherMenu } from "@/components/layout/RoleSwitcherMenu";
 
 const navItems = [
   { label: "Trang chủ", href: "/dashboard" },
@@ -47,6 +48,7 @@ export function PatientHeader() {
         </nav>
 
         <div className="flex items-center gap-3">
+          <RoleSwitcherMenu />
           <Link
             href="tel:115"
             className="hidden items-center gap-1.5 rounded-full bg-danger px-4 py-2 text-caption font-bold text-white sm:flex"
