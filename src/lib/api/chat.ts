@@ -253,6 +253,8 @@ export async function sendChatMessage(sessionId: string, content: string): Promi
           ? ["ACCEPT_APPOINTMENT", "CHANGE_APPOINTMENT", "DECLINE_APPOINTMENT"]
           : ["CONFIRM_TRIAGE"];
 
+        const replyText = d.response || d.reply_text || "";
+
         return {
           userMessage: {
             id: `msg_user_${Date.now()}`,
@@ -274,8 +276,8 @@ export async function sendChatMessage(sessionId: string, content: string): Promi
             senderId: "ai_agent",
             senderType: "AI",
             messageType: "TEXT",
-            content: d.reply_text,
-            sanitizedContent: d.reply_text,
+            content: replyText,
+            sanitizedContent: replyText,
             routingStrategy: "LANGGRAPH_CLINICAL_RAG",
             intentCode: isEmergency ? "EMERGENCY_ALERT" : "ROUTING_PROPOSAL",
             citations: mappedCitations,
@@ -291,7 +293,7 @@ export async function sendChatMessage(sessionId: string, content: string): Promi
             detected: isEmergency,
             urgency: isEmergency ? "CRITICAL_115" : "ROUTINE",
             reasonCodes: isEmergency ? ["RED_FLAG_ACUTE"] : [],
-            actionMessage: isEmergency ? d.reply_text : null,
+            actionMessage: isEmergency ? replyText : null,
           },
           workflowState: isEmergency ? "EMERGENCY_TRIGGERED" : d.progress_percent >= 100 ? "OFFERS_READY" : "TRIAGE_IN_PROGRESS",
           missingFields: [],
