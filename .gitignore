@@ -68,13 +68,16 @@ dataset/
 *.log
 npm-debug.log*
 yarn-debug.log*
-.serena/cache/
-.serena/project.local.yml
 .idea/
 .vscode/
 Thumbs.db
 *.bak
 *.tmp
+
+# serena local agent workspace (never commit to git)
+.serena/
+/.serena/
+.serena*
 
 # python backend
 backend/.venv/
