@@ -49,58 +49,74 @@ export default function LandingPage() {
     <div className="bg-bg">
       <NavBar />
 
-      {/* Hero Section */}
-      <section className="mx-auto grid max-w-6xl gap-12 px-6 py-20 md:grid-cols-2 md:items-center">
-        <div>
-          <span className="inline-flex items-center gap-2 rounded-full bg-primary-100 px-4 py-1.5 text-caption font-bold uppercase tracking-wide text-primary-900 border border-primary-200">
-            <ShieldPlus size={14} className="text-teal-700" /> Hệ Thống Y Tế Thông Minh VMEC
-          </span>
-          <h1 className="mt-5 text-display font-bold text-primary-900 leading-tight">
-            Chào mừng đến với <span className="text-teal-700">MedAgent AI</span>
-          </h1>
-          <p className="mt-5 max-w-lg text-body-lg text-ink-700">
-            Trợ lý AI đồng hành cùng bạn trong hành trình khám chữa bệnh tại Bệnh
-            viện Đa khoa Quốc tế VMEC. Định tuyến 17 chuyên khoa, kết nối liên thông Lễ tân, Bác sĩ và Hồ sơ bệnh án điện tử.
-          </p>
-          <div className="mt-8 flex flex-wrap gap-4">
-            <Button href="/chat" size="lg" icon={<MessageCircle size={18} />}>
-              Trò chuyện với Trợ lý AI
-            </Button>
-            <Button href="/login" variant="outline" size="lg" icon={<CalendarPlus size={18} />}>
-              Cổng Đăng Nhập
-            </Button>
-          </div>
-          <div className="mt-10 flex gap-10 border-t border-line pt-6">
-            <Stat value="17" label="Chuyên khoa chuẩn BYT" />
-            <Stat value="24/7" label="Hỗ trợ liên tục" />
-            <Stat value="99.2%" label="Độ chuẩn xác Triage" />
-          </div>
-        </div>
+      {/* Hero Section with Soft Blurred Gemini Hospital Architecture Background */}
+      <section className="relative overflow-hidden border-b border-line bg-gradient-to-b from-teal-50/40 via-white to-white py-16 sm:py-24">
+        {/* Background Image Layer with Blur and Subtle Opacity */}
+        <div
+          className="absolute inset-0 pointer-events-none z-0 bg-cover bg-center opacity-[0.16] mix-blend-multiply scale-105 filter blur-[2px]"
+          style={{
+            backgroundImage: "url('/images/vmec_hero_bg.jpg')",
+          }}
+          aria-hidden="true"
+        />
+        {/* Soft Gradient Overlay for Optimal Contrast & Readability */}
+        <div
+          className="absolute inset-0 pointer-events-none z-0 bg-gradient-to-r from-white/95 via-white/80 to-transparent"
+          aria-hidden="true"
+        />
 
-        <div className="relative aspect-square overflow-hidden rounded-card-lg bg-gradient-to-br from-primary-900 via-primary-700 to-teal-800 p-8 flex flex-col justify-between text-white shadow-2xl">
-          <div className="flex items-center justify-between">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/20 backdrop-blur-md">
-              <Activity size={26} className="text-teal-200" />
-            </div>
-            <span className="rounded-full bg-teal-500/30 px-3.5 py-1 text-caption font-semibold border border-teal-300/40">
-              Live Health Agent
+        <div className="relative z-10 mx-auto grid max-w-6xl gap-12 px-6 md:grid-cols-2 md:items-center">
+          <div>
+            <span className="inline-flex items-center gap-2 rounded-full bg-primary-100/90 backdrop-blur-xs px-4 py-1.5 text-caption font-bold uppercase tracking-wide text-primary-900 border border-primary-200 shadow-2xs">
+              <ShieldPlus size={14} className="text-teal-700" /> Hệ Thống Y Tế Thông Minh VMEC
             </span>
+            <h1 className="mt-5 text-display font-bold text-primary-900 leading-tight">
+              Chào mừng đến với <span className="text-teal-700">MedAgent AI</span>
+            </h1>
+            <p className="mt-5 max-w-lg text-body-lg text-ink-700 leading-relaxed">
+              Trợ lý AI đồng hành cùng bạn trong hành trình khám chữa bệnh tại Bệnh
+              viện Đa khoa Quốc tế VMEC. Định tuyến 17 chuyên khoa, kết nối liên thông Lễ tân, Bác sĩ và Hồ sơ bệnh án điện tử.
+            </p>
+            <div className="mt-8 flex flex-wrap gap-4">
+              <Button href="/chat" size="lg" icon={<MessageCircle size={18} />}>
+                Trò chuyện với Trợ lý AI
+              </Button>
+              <Button href="/login" variant="outline" size="lg" icon={<CalendarPlus size={18} />}>
+                Cổng Đăng Nhập
+              </Button>
+            </div>
+            <div className="mt-10 flex gap-10 border-t border-line/80 pt-6">
+              <Stat value="17" label="Chuyên khoa chuẩn BYT" />
+              <Stat value="24/7" label="Hỗ trợ liên tục" />
+              <Stat value="99.2%" label="Độ chuẩn xác Triage" />
+            </div>
           </div>
 
-          <div className="space-y-4">
-            <div className="rounded-xl bg-white/10 p-4 backdrop-blur-md border border-white/20">
-              <p className="text-caption text-teal-200 font-semibold uppercase">Chuẩn đoán Lâm sàng AI</p>
-              <p className="text-body font-bold mt-1 text-white">Định tuyến chính xác phòng khám và bác sĩ chuyên khoa</p>
+          <div className="relative aspect-square overflow-hidden rounded-card-lg bg-gradient-to-br from-primary-950/95 via-primary-900/90 to-teal-900/95 p-8 flex flex-col justify-between text-white shadow-2xl border border-teal-500/20 backdrop-blur-md">
+            <div className="flex items-center justify-between">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/20 backdrop-blur-md shadow-inner">
+                <Activity size={26} className="text-teal-200" />
+              </div>
+              <span className="rounded-full bg-teal-500/30 px-3.5 py-1 text-caption font-semibold border border-teal-300/40 shadow-xs">
+                Live Health Agent
+              </span>
             </div>
-            <div className="rounded-xl bg-white/10 p-4 backdrop-blur-md border border-white/20">
-              <p className="text-caption text-teal-200 font-semibold uppercase">Đồng bộ EMR 4 bước</p>
-              <p className="text-body font-bold mt-1 text-white">Patient Chat → Lễ tân duyệt → Bác sĩ khám → Sổ bệnh án</p>
-            </div>
-          </div>
 
-          <div className="flex items-center justify-between text-caption text-teal-200">
-            <span>Bệnh viện Đa khoa Quốc tế VMEC</span>
-            <span>123 Nguyễn Trãi, Hà Nội</span>
+            <div className="space-y-4">
+              <div className="rounded-xl bg-white/10 p-4 backdrop-blur-md border border-white/20 shadow-xs">
+                <p className="text-caption text-teal-200 font-semibold uppercase tracking-wider">Chuẩn đoán Lâm sàng AI</p>
+                <p className="text-body font-bold mt-1 text-white">Định tuyến chính xác phòng khám và bác sĩ chuyên khoa</p>
+              </div>
+              <div className="rounded-xl bg-white/10 p-4 backdrop-blur-md border border-white/20 shadow-xs">
+                <p className="text-caption text-teal-200 font-semibold uppercase tracking-wider">Đồng bộ EMR 4 bước</p>
+                <p className="text-body font-bold mt-1 text-white">Patient Chat → Lễ tân duyệt → Bác sĩ khám → Sổ bệnh án</p>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between text-caption text-teal-200">
+              <span>Bệnh viện Đa khoa Quốc tế VMEC</span>
+              <span>123 Nguyễn Trãi, Hà Nội</span>
+            </div>
           </div>
         </div>
       </section>
