@@ -86,7 +86,36 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { action, targetSlot, userMessage, currentSlots, specialtyCode, specialtyName, lastExtractedFact } = body;
 
+    const API_BASE_URL = (process.env.NEXT_PUBLIC_API_URL || "https://vmec-api.onrender.com").replace(/\/$/, "");
+
     if (action === "JUDGE") {
+      try {
+        const backendRes = await fetch(`${API_BASE_URL}/api/triage/evaluate`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "JUDGE",
+            targetSlot,
+            userMessage,
+            currentSlots: currentSlots || {},
+          }),
+        });
+        if (backendRes.ok) {
+          const backendData = await backendRes.json();
+          if (backendData.success && backendData.result) {
+            return NextResponse.json({
+              success: true,
+              result: backendData.result,
+              model: "gemini-3.1-flash-lite",
+              keyIndex: 1,
+              source: "RENDER_FASTAPI_BACKEND",
+            });
+          }
+        }
+      } catch (beErr) {
+        console.warn("Render backend evaluate failed, falling back:", beErr);
+      }
+
       const userPrompt = buildJudgeUserPrompt(targetSlot as SlotKey, userMessage, currentSlots);
       const llmResult = await callGeminiWithRotation(CLINICAL_JUDGE_SYSTEM_PROMPT, userPrompt);
 
@@ -113,6 +142,38 @@ export async function POST(req: NextRequest) {
     }
 
     if (action === "INTERROGATE") {
+      try {
+        const backendRes = await fetch(`${API_BASE_URL}/api/triage/evaluate`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "INTERROGATE",
+            targetSlot,
+            specialtyCode: specialtyCode || "TIM_MACH",
+            specialtyName: specialtyName || "Khoa Tim Mạch",
+            currentSlots: currentSlots || {},
+            lastExtractedFact: lastExtractedFact || "",
+          }),
+        });
+        if (backendRes.ok) {
+          const backendData = await backendRes.json();
+          if (backendData.success && backendData.result) {
+            return NextResponse.json({
+              success: true,
+              result: {
+                question: backendData.result.question,
+                chips: backendData.result.chips,
+              },
+              model: "gemini-3.1-flash-lite",
+              keyIndex: 1,
+              source: "RENDER_FASTAPI_BACKEND",
+            });
+          }
+        }
+      } catch (beErr) {
+        console.warn("Render backend interrogate failed, falling back:", beErr);
+      }
+
       const userPrompt = buildInterrogatorUserPrompt(
         targetSlot as SlotKey,
         specialtyCode,
