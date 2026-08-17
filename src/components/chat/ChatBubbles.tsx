@@ -34,17 +34,19 @@ export function AgentBubble({
   citations,
   confidenceScore = 92,
   soothingPayload,
+  isStreaming = false,
 }: {
   children: ReactNode;
   citations?: CitationItem[];
   confidenceScore?: number;
   soothingPayload?: PsychologicalSoothingPayload | null;
+  isStreaming?: boolean;
 }) {
   const [showAllDetails, setShowAllDetails] = useState(false);
 
   return (
     <div className="flex items-start gap-3 animate-in fade-in slide-in-from-bottom-1 duration-150">
-      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary-700 text-white shadow-xs">
+      <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary-700 text-white shadow-xs transition-transform ${isStreaming ? "scale-105 ring-2 ring-primary-300 ring-offset-1 animate-pulse" : ""}`}>
         <Bot size={18} />
       </span>
       <div className="max-w-2xl flex-1 space-y-2">
@@ -53,6 +55,7 @@ export function AgentBubble({
             <ClinicalMessageRenderer
               content={children}
               soothingPayload={soothingPayload}
+              isStreaming={isStreaming}
             />
           ) : (
             <div className="whitespace-pre-wrap">{children}</div>

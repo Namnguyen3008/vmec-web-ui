@@ -20,6 +20,7 @@ import type { PsychologicalSoothingPayload } from "@/lib/ai/types";
 interface ClinicalMessageRendererProps {
   content: string;
   soothingPayload?: PsychologicalSoothingPayload | null;
+  isStreaming?: boolean;
 }
 
 /**
@@ -84,6 +85,7 @@ function parseRoutingSection(content: string) {
 export function ClinicalMessageRenderer({
   content,
   soothingPayload,
+  isStreaming = false,
 }: ClinicalMessageRendererProps) {
   const routingData = parseRoutingSection(content);
 
@@ -320,9 +322,13 @@ export function ClinicalMessageRenderer({
         }
 
         // Normal paragraph with bold & italic styling
+        const isLastPara = pIdx === paragraphs.length - 1;
         return (
           <p key={pIdx} className="text-body-sm">
             {formatMarkdownInline(trimmed)}
+            {isStreaming && isLastPara && (
+              <span className="inline-block w-1.5 h-4 ml-1 bg-primary-600 rounded-full animate-pulse align-middle" />
+            )}
           </p>
         );
       })}
