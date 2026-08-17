@@ -48,7 +48,7 @@ function getSafePatientDetail(apt: DetailedAppointment | null | undefined): Deta
       bloodType: "O+",
       allergies: [],
       medicalHistory: [],
-      vitalSigns: { bloodPressure: "120/80", heartRate: 75, temperature: 36.6, spO2: 99, weight: 60 },
+      vitalSigns: undefined,
       clinicalNote: "",
       prescriptions: [],
       diagnosticOrders: [],
@@ -76,7 +76,7 @@ function getSafePatientDetail(apt: DetailedAppointment | null | undefined): Deta
     bloodType: detail?.bloodType || "O+",
     allergies: detail?.allergies || [],
     medicalHistory: detail?.medicalHistory || [],
-    vitalSigns: detail?.vitalSigns || { bloodPressure: "120/80", heartRate: 75, temperature: 36.6, spO2: 99, weight: 60 },
+    vitalSigns: detail?.vitalSigns || undefined,
     clinicalNote: detail?.clinicalNote || "",
     receptionistNote: detail?.receptionistNote,
     prescriptions: detail?.prescriptions || [],
@@ -99,12 +99,18 @@ export default function DoctorDashboardPage() {
   // EMR Form State inside modal
   const [doctorNoteInput, setDoctorNoteInput] = useState<string>("");
   const [diagnosisInput, setDiagnosisInput] = useState<string>("");
-  const [vitalSigns, setVitalSigns] = useState({
-    bloodPressure: "120/80",
-    heartRate: 75,
-    temperature: 36.6,
-    spO2: 99,
-    weight: 60,
+  const [vitalSigns, setVitalSigns] = useState<{
+    bloodPressure: string;
+    heartRate: number | string;
+    temperature: number | string;
+    spO2: number | string;
+    weight: number | string;
+  }>({
+    bloodPressure: "",
+    heartRate: "",
+    temperature: "",
+    spO2: "",
+    weight: "",
   });
   const [prescriptions, setPrescriptions] = useState<Array<{ medicineName: string; dosage: string; usage: string; quantity: string }>>([]);
   const [diagnosticOrders, setDiagnosticOrders] = useState<Array<{ testName: string; department: string; status: "ORDERED" | "COMPLETED"; resultSummary?: string }>>([]);
@@ -166,7 +172,21 @@ export default function DoctorDashboardPage() {
     setDoctorNoteInput(detail.clinicalNote || "");
     setDiagnosisInput(detail.aiAssessment?.preliminaryDiagnosis || item.specialtyName || "");
     if (detail.vitalSigns) {
-      setVitalSigns({ ...detail.vitalSigns });
+      setVitalSigns({
+        bloodPressure: detail.vitalSigns.bloodPressure || "",
+        heartRate: detail.vitalSigns.heartRate || "",
+        temperature: detail.vitalSigns.temperature || "",
+        spO2: detail.vitalSigns.spO2 || "",
+        weight: detail.vitalSigns.weight || "",
+      });
+    } else {
+      setVitalSigns({
+        bloodPressure: "",
+        heartRate: "",
+        temperature: "",
+        spO2: "",
+        weight: "",
+      });
     }
     setPrescriptions(detail.prescriptions ? [...detail.prescriptions] : []);
     setDiagnosticOrders(detail.diagnosticOrders ? [...detail.diagnosticOrders] : []);
@@ -199,7 +219,7 @@ export default function DoctorDashboardPage() {
       ...diagnosticOrders,
       {
         testName: newTestName.trim(),
-        department: newTestDept.trim() || "Khoa Cận lâm sàng & Thăm dò chức năng",
+        department: newTestDept.trim() || "Khoa Chẩn đoán hình ảnh & Thăm dò chức năng",
         status: "ORDERED",
       },
     ]);
@@ -207,16 +227,31 @@ export default function DoctorDashboardPage() {
     setNewTestDept("");
   };
 
-  const handleSaveConsultation = async (status: "SAVE_DRAFT" | "COMPLETE") => {
+  const handleRemoveDiagnosticOrder = (idx: number) => {
+    setDiagnosticOrders(diagnosticOrders.filter((_, i) => i !== idx));
+  };
+
+  const handleSaveConsultation = (status: "SAVE_DRAFT" | "COMPLETE") => {
     if (!selectedPatient) return;
 
+    const parsedVitalSigns = vitalSigns.bloodPressure
+      ? {
+          bloodPressure: vitalSigns.bloodPressure,
+          heartRate: Number(vitalSigns.heartRate) || 75,
+          temperature: Number(vitalSigns.temperature) || 36.6,
+          spO2: Number(vitalSigns.spO2) || 99,
+          weight: Number(vitalSigns.weight) || 60,
+        }
+      : undefined;
+
     if (status === "COMPLETE") {
-      await completeConsultation(
-        selectedPatient.id,
-        doctorNoteInput.trim() || "Khám và tư vấn lâm sàng hoàn tất.",
+      completeConsultation(selectedPatient.id, {
+        clinicalNote: doctorNoteInput,
+        preliminaryDiagnosis: diagnosisInput,
+        vitalSigns: parsedVitalSigns,
         prescriptions,
-        diagnosticOrders
-      );
+        diagnosticOrders,
+      });
       showToast("Đã hoàn tất phiên khám và xuất hồ sơ bệnh án thành công!");
     } else {
       const detail = getSafePatientDetail(selectedPatient);
@@ -225,7 +260,7 @@ export default function DoctorDashboardPage() {
         patientDetail: {
           ...detail,
           clinicalNote: doctorNoteInput,
-          vitalSigns,
+          vitalSigns: parsedVitalSigns,
           prescriptions,
           diagnosticOrders,
         },
@@ -407,7 +442,7 @@ export default function DoctorDashboardPage() {
                   </div>
 
                   {/* Vital Signs Mini Badges */}
-                  {detail.vitalSigns && (
+                  {detail.vitalSigns && detail.vitalSigns.bloodPressure ? (
                     <div className="mt-3 flex flex-wrap gap-1.5 text-caption">
                       <span className="inline-flex items-center gap-1 bg-surface border border-line px-2 py-0.5 rounded text-ink-700">
                         <Heart size={12} className="text-red-500" /> HA: <strong>{detail.vitalSigns.bloodPressure}</strong>
@@ -418,6 +453,11 @@ export default function DoctorDashboardPage() {
                       <span className="inline-flex items-center gap-1 bg-surface border border-line px-2 py-0.5 rounded text-ink-700">
                         SpO2: <strong>{detail.vitalSigns.spO2}%</strong>
                       </span>
+                    </div>
+                  ) : (
+                    <div className="mt-3 flex items-center gap-1.5 text-[11px] text-amber-800 bg-amber-50/90 px-2.5 py-1 rounded-md border border-amber-200/70">
+                      <Activity size={12} className="text-amber-600 shrink-0" />
+                      <span>Chưa đo sinh hiệu <em>(Đo trực tiếp tại bàn khám)</em></span>
                     </div>
                   )}
                 </div>
@@ -538,6 +578,7 @@ export default function DoctorDashboardPage() {
                     <label className="text-caption text-ink-500 block">Huyết áp (mmHg)</label>
                     <input
                       type="text"
+                      placeholder="vd: 120/80"
                       value={vitalSigns.bloodPressure}
                       onChange={(e) => setVitalSigns({ ...vitalSigns, bloodPressure: e.target.value })}
                       className="w-full bg-white font-bold text-ink-900 px-2 py-1 rounded border border-line mt-1 text-body"
@@ -547,8 +588,9 @@ export default function DoctorDashboardPage() {
                     <label className="text-caption text-ink-500 block">Nhịp tim (bpm)</label>
                     <input
                       type="number"
+                      placeholder="vd: 75"
                       value={vitalSigns.heartRate}
-                      onChange={(e) => setVitalSigns({ ...vitalSigns, heartRate: Number(e.target.value) })}
+                      onChange={(e) => setVitalSigns({ ...vitalSigns, heartRate: e.target.value })}
                       className="w-full bg-white font-bold text-ink-900 px-2 py-1 rounded border border-line mt-1 text-body"
                     />
                   </div>
@@ -557,8 +599,9 @@ export default function DoctorDashboardPage() {
                     <input
                       type="number"
                       step="0.1"
+                      placeholder="vd: 36.6"
                       value={vitalSigns.temperature}
-                      onChange={(e) => setVitalSigns({ ...vitalSigns, temperature: Number(e.target.value) })}
+                      onChange={(e) => setVitalSigns({ ...vitalSigns, temperature: e.target.value })}
                       className="w-full bg-white font-bold text-ink-900 px-2 py-1 rounded border border-line mt-1 text-body"
                     />
                   </div>
@@ -566,8 +609,9 @@ export default function DoctorDashboardPage() {
                     <label className="text-caption text-ink-500 block">SpO2 (%)</label>
                     <input
                       type="number"
+                      placeholder="vd: 99"
                       value={vitalSigns.spO2}
-                      onChange={(e) => setVitalSigns({ ...vitalSigns, spO2: Number(e.target.value) })}
+                      onChange={(e) => setVitalSigns({ ...vitalSigns, spO2: e.target.value })}
                       className="w-full bg-white font-bold text-ink-900 px-2 py-1 rounded border border-line mt-1 text-body"
                     />
                   </div>
@@ -576,8 +620,9 @@ export default function DoctorDashboardPage() {
                     <input
                       type="number"
                       step="0.5"
+                      placeholder="vd: 60"
                       value={vitalSigns.weight}
-                      onChange={(e) => setVitalSigns({ ...vitalSigns, weight: Number(e.target.value) })}
+                      onChange={(e) => setVitalSigns({ ...vitalSigns, weight: e.target.value })}
                       className="w-full bg-white font-bold text-ink-900 px-2 py-1 rounded border border-line mt-1 text-body"
                     />
                   </div>

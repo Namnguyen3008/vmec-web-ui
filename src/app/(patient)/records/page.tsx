@@ -178,7 +178,7 @@ export default function RecordsPage() {
                 <h3 className="font-bold text-ink-900 flex items-center gap-2 text-body">
                   <Activity size={16} className="text-danger" /> Sinh hiệu &amp; Thông tin lâm sàng
                 </h3>
-                {selectedRecord.patientDetail?.vitalSigns ? (
+                {selectedRecord.patientDetail?.vitalSigns && selectedRecord.patientDetail.vitalSigns.bloodPressure ? (
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-center">
                     <div className="rounded-lg bg-surface border border-line p-2">
                       <span className="text-caption text-ink-500 block">Huyết áp</span>
@@ -198,7 +198,7 @@ export default function RecordsPage() {
                     </div>
                   </div>
                 ) : (
-                  <p className="text-caption text-ink-500">Chưa có chỉ số sinh hiệu.</p>
+                  <p className="text-caption text-ink-500 italic">Chưa đo chỉ số sinh hiệu (Sẽ được điều dưỡng / bác sĩ đo trực tiếp khi vào phòng khám).</p>
                 )}
               </div>
 

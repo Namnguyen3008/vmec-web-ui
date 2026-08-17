@@ -53,13 +53,7 @@ export function getLocalAppointments(): DetailedAppointment[] {
           bloodType: "O+",
           allergies: [],
           medicalHistory: [],
-          vitalSigns: {
-            bloodPressure: "120/80",
-            heartRate: 75,
-            temperature: 36.6,
-            spO2: 99,
-            weight: 60,
-          },
+          vitalSigns: item.patientDetail?.vitalSigns || undefined,
           aiAssessment: {
             preliminaryDiagnosis: item.specialtyName || "Khám chuyên khoa",
             urgencyLevel: "ROUTINE",
@@ -124,13 +118,7 @@ export function saveLocalAppointment(appointment: Appointment | DetailedAppointm
         bloodType: "O+",
         allergies: [],
         medicalHistory: [],
-        vitalSigns: {
-          bloodPressure: "120/80",
-          heartRate: 75,
-          temperature: 36.6,
-          spO2: 99,
-          weight: 60,
-        },
+        vitalSigns: existing?.patientDetail?.vitalSigns || undefined,
         aiAssessment: {
           preliminaryDiagnosis: appointment.specialtyName || "Khám chuyên khoa",
           urgencyLevel: "ROUTINE",
@@ -330,13 +318,7 @@ export async function createAppointment(input: {
         bloodType: "O+",
         allergies: [],
         medicalHistory: [],
-        vitalSigns: {
-          bloodPressure: "120/80",
-          heartRate: 76,
-          temperature: 36.6,
-          spO2: 99,
-          weight: 62,
-        },
+        vitalSigns: undefined,
         aiAssessment: {
           preliminaryDiagnosis: `${specialtyName} - Phân tích AI Triage`,
           urgencyLevel: "ROUTINE",
@@ -513,12 +495,28 @@ export async function startConsultation(id: string): Promise<DetailedAppointment
 
 export async function completeConsultation(
   id: string,
-  clinicalNote: string,
+  clinicalNoteOrPayload:
+    | string
+    | {
+        clinicalNote?: string;
+        preliminaryDiagnosis?: string;
+        vitalSigns?: DetailedPatientSnapshot["vitalSigns"];
+        prescriptions?: DetailedPatientSnapshot["prescriptions"];
+        diagnosticOrders?: DetailedPatientSnapshot["diagnosticOrders"];
+      },
   prescriptions?: DetailedPatientSnapshot["prescriptions"],
   diagnosticOrders?: DetailedPatientSnapshot["diagnosticOrders"]
 ): Promise<DetailedAppointment> {
   const local = getLocalAppointments();
   const found = local.find((a) => a.id === id) || local[0];
+
+  const isObj = typeof clinicalNoteOrPayload === "object" && clinicalNoteOrPayload !== null;
+  const clinicalNote = isObj ? clinicalNoteOrPayload.clinicalNote || "" : (clinicalNoteOrPayload as string);
+  const finalPrescriptions = prescriptions || (isObj ? clinicalNoteOrPayload.prescriptions : undefined) || found.patientDetail?.prescriptions;
+  const finalDiagnosticOrders = diagnosticOrders || (isObj ? clinicalNoteOrPayload.diagnosticOrders : undefined) || found.patientDetail?.diagnosticOrders;
+  const finalVitalSigns = (isObj && clinicalNoteOrPayload.vitalSigns) ? clinicalNoteOrPayload.vitalSigns : found.patientDetail?.vitalSigns;
+  const finalDiagnosis = (isObj && clinicalNoteOrPayload.preliminaryDiagnosis) ? clinicalNoteOrPayload.preliminaryDiagnosis : found.patientDetail?.aiAssessment?.preliminaryDiagnosis;
+
   const updated: DetailedAppointment = {
     ...found,
     status: "COMPLETED",
@@ -527,8 +525,18 @@ export async function completeConsultation(
     patientDetail: {
       ...found.patientDetail,
       clinicalNote,
-      prescriptions: prescriptions || found.patientDetail.prescriptions,
-      diagnosticOrders: diagnosticOrders || found.patientDetail.diagnosticOrders,
+      prescriptions: finalPrescriptions,
+      diagnosticOrders: finalDiagnosticOrders,
+      vitalSigns: finalVitalSigns,
+      aiAssessment: found.patientDetail?.aiAssessment ? {
+        ...found.patientDetail.aiAssessment,
+        preliminaryDiagnosis: finalDiagnosis || found.patientDetail.aiAssessment.preliminaryDiagnosis,
+      } : {
+        preliminaryDiagnosis: finalDiagnosis || "Khám chuyên khoa",
+        urgencyLevel: "ROUTINE",
+        confidenceScore: 90,
+        reasoning: "Tư vấn lâm sàng qua MedAgent AI.",
+      },
     },
   };
   saveLocalAppointment(updated);
