@@ -1,6 +1,10 @@
 import { apiRequest } from "@/lib/api/client";
 import type { CheckoutSelection, DoctorOption } from "@/lib/api/contracts";
-import { MASTER_DOCTORS, MASTER_SPECIALTIES, getSpecialtyByCode } from "@/lib/clinicalMasterCatalog";
+import {
+  HOSPITAL_DOCTORS,
+  HOSPITAL_SPECIALTIES,
+  getHospitalSpecialtyByCode,
+} from "@/lib/api/hospitalDirectory";
 
 function mapSelection(value: unknown): CheckoutSelection {
   const raw = value as Record<string, unknown>;
@@ -19,7 +23,7 @@ function mapSelection(value: unknown): CheckoutSelection {
   };
 }
 
-const DEFAULT_DOCTORS: DoctorOption[] = MASTER_DOCTORS.map((doc) => ({
+const DEFAULT_DOCTORS: DoctorOption[] = HOSPITAL_DOCTORS.map((doc) => ({
   id: doc.id,
   fullName: `${doc.fullName} (${doc.title})`,
   room: `${doc.room} - ${doc.building}`,
@@ -37,8 +41,8 @@ export async function getRecommendations(specialtyId: string): Promise<CheckoutS
     const alternatives = Array.isArray(raw.alternatives) ? raw.alternatives.map(mapSelection) : [];
     return [...primary, ...alternatives];
   } catch {
-    const spec = getSpecialtyByCode(specialtyId) || MASTER_SPECIALTIES[0];
-    const doc = spec.doctors[0] || MASTER_DOCTORS[0];
+    const spec = getHospitalSpecialtyByCode(specialtyId) || HOSPITAL_SPECIALTIES[0];
+    const doc = spec.doctors[0] || HOSPITAL_DOCTORS[0];
 
     const today = new Date(Date.now() + 86400000);
     const tomorrowSlot1 = new Date(today);

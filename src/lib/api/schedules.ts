@@ -1,7 +1,12 @@
 import { apiRequest } from "@/lib/api/client";
 import type { ReceptionScheduleOverview, ReceptionScheduleSlot, ScheduleSlot } from "@/lib/api/contracts";
 import { list, mapReceptionScheduleOverview, mapReceptionScheduleSlot, mapScheduleSlot } from "@/lib/api/mappers";
-import { MASTER_DOCTORS, MASTER_SPECIALTIES, getSpecialtyByCode, getDoctorById } from "@/lib/clinicalMasterCatalog";
+import {
+  HOSPITAL_DOCTORS,
+  HOSPITAL_SPECIALTIES,
+  getHospitalDoctorById,
+  getHospitalSpecialtyByCode,
+} from "@/lib/api/hospitalDirectory";
 
 export async function listAvailableSlots(input: {
   doctorId: string;
@@ -18,7 +23,7 @@ export async function listAvailableSlots(input: {
     );
   } catch {
     const today = (input.dateFrom || new Date().toISOString()).split("T")[0];
-    const doc = getDoctorById(input.doctorId) || MASTER_DOCTORS[0];
+    const doc = getHospitalDoctorById(input.doctorId) || HOSPITAL_DOCTORS[0];
 
     return [
       {
@@ -119,8 +124,8 @@ export async function getReceptionSchedule(
     );
   } catch {
     const filteredDoctors = specialtyId
-      ? MASTER_DOCTORS.filter((d) => d.specialtyCode.toUpperCase() === specialtyId.toUpperCase())
-      : MASTER_DOCTORS;
+      ? HOSPITAL_DOCTORS.filter((d) => d.specialtyCode.toUpperCase() === specialtyId.toUpperCase())
+      : HOSPITAL_DOCTORS;
 
     const items: ReceptionScheduleSlot[] = [];
     for (const doc of filteredDoctors) {
@@ -162,7 +167,7 @@ export async function getReceptionSchedule(
     return {
       date,
       items,
-      specialties: MASTER_SPECIALTIES.map((s) => ({ id: s.code, name: s.name })),
+      specialties: HOSPITAL_SPECIALTIES.map((s) => ({ id: s.code, name: s.name })),
       summary: {
         doctorCount: filteredDoctors.length,
         totalSlots: items.length,

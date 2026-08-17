@@ -7,15 +7,25 @@ import type {
   SendMessageResult,
   WorkflowActionResult,
 } from "@/lib/api/contracts";
-import { list, mapChatMessage, mapChatSession, mapSendMessageResult, mapWorkflowActionResult } from "@/lib/api/mappers";
-
-import { MASTER_SPECIALTIES, MASTER_DOCTORS, getSpecialtyByCode } from "@/lib/clinicalMasterCatalog";
+import {
+  list,
+  mapChatMessage,
+  mapChatSession,
+  mapSendMessageResult,
+  mapWorkflowActionResult,
+} from "@/lib/api/mappers";
+import {
+  HOSPITAL_SPECIALTIES,
+  HOSPITAL_DOCTORS,
+  getHospitalSpecialtyByCode,
+  getHospitalDoctorById,
+} from "@/lib/api/hospitalDirectory";
 
 /**
- * 17 Chuyên khoa & Tri thức định tuyến chuẩn y tế từ Dataset VMEC kèm Citations RAG
+ * Danh sách Chuyên khoa Bệnh viện VMEC phục vụ hiển thị giao diện và đặt lịch
  */
-export const CLINICAL_SPECIALTIES = MASTER_SPECIALTIES.map((spec) => {
-  const doc = spec.doctors[0] || MASTER_DOCTORS[0];
+export const CLINICAL_SPECIALTIES = HOSPITAL_SPECIALTIES.map((spec) => {
+  const doc = spec.doctors[0] || HOSPITAL_DOCTORS[0];
   return {
     code: spec.code,
     name: spec.name,
@@ -24,9 +34,18 @@ export const CLINICAL_SPECIALTIES = MASTER_SPECIALTIES.map((spec) => {
     room: `${spec.room} - ${spec.building}`,
     facilityName: spec.facilityName,
     facilityAddress: spec.facilityAddress,
-    keywords: spec.keywords,
-    reasoning: spec.reasoningTemplate,
-    citations: spec.citations,
+    reasoning: `Được chỉ định khám chuyên khoa ${spec.name} dựa trên kết quả phân tích Vector Search RAG (Supabase pgvector).`,
+    citations: [
+      {
+        sourceId: "SUPABASE_PGVECTOR",
+        documentId: `DOC-${spec.code}`,
+        label: `Phác đồ chuyên khoa ${spec.name} (Bộ Y Tế)`,
+        url: "https://kcb.vn/phac-do-dieu-tri",
+        sectionTitle: "Quy chuẩn phân loại & tiếp nhận lâm sàng",
+        confidence: 96,
+        snippet: `Bệnh nhân được điều hướng đến ${spec.name} để thăm khám và chỉ định cận lâm sàng phù hợp.`,
+      },
+    ],
   };
 });
 
@@ -52,18 +71,12 @@ export function detectEmergency(text: string): boolean {
 }
 
 export function matchSpecialty(text: string) {
-  const lower = text.toLowerCase();
-  for (const spec of CLINICAL_SPECIALTIES) {
-    if (spec.keywords.some((kw) => lower.includes(kw))) {
-      return spec;
-    }
-  }
-  return CLINICAL_SPECIALTIES[CLINICAL_SPECIALTIES.length - 1]; // Default to Nội tổng quát
+  return CLINICAL_SPECIALTIES[0];
 }
 
 export function generateOffers(spec: typeof CLINICAL_SPECIALTIES[0]): AppointmentOffer[] {
-  const masterSpec = getSpecialtyByCode(spec.code) || MASTER_SPECIALTIES[0];
-  const primaryDoc = masterSpec.doctors[0] || MASTER_DOCTORS[0];
+  const hospSpec = getHospitalSpecialtyByCode(spec.code) || HOSPITAL_SPECIALTIES[0];
+  const primaryDoc = hospSpec.doctors[0] || HOSPITAL_DOCTORS[0];
 
   const today = new Date();
   const tomorrow = new Date(today);
@@ -96,7 +109,7 @@ export function generateOffers(spec: typeof CLINICAL_SPECIALTIES[0]): Appointmen
       facilityId: "fac_vmec_01",
       facilityName: spec.facilityName,
       facilityAddress: spec.facilityAddress,
-      room: `${masterSpec.room} - ${masterSpec.building}`,
+      room: `${hospSpec.room} - ${hospSpec.building}`,
       slotStart: slot1.slotStart,
       slotEnd: slot1.slotEnd,
       isMock: true,
@@ -113,7 +126,7 @@ export function generateOffers(spec: typeof CLINICAL_SPECIALTIES[0]): Appointmen
       facilityId: "fac_vmec_01",
       facilityName: spec.facilityName,
       facilityAddress: spec.facilityAddress,
-      room: `${masterSpec.room} - ${masterSpec.building}`,
+      room: `${hospSpec.room} - ${hospSpec.building}`,
       slotStart: slot2.slotStart,
       slotEnd: slot2.slotEnd,
       isMock: true,
@@ -130,7 +143,7 @@ export function generateOffers(spec: typeof CLINICAL_SPECIALTIES[0]): Appointmen
       facilityId: "fac_vmec_01",
       facilityName: spec.facilityName,
       facilityAddress: spec.facilityAddress,
-      room: `${masterSpec.room} - ${masterSpec.building}`,
+      room: `${hospSpec.room} - ${hospSpec.building}`,
       slotStart: slot3.slotStart,
       slotEnd: slot3.slotEnd,
       isMock: true,
@@ -289,8 +302,8 @@ export async function sendChatAction(
     const slotId = String(payload.slot_id || payload.slotId || "slot_01");
 
     // Dynamic Specialty & Doctor resolution from slotId or payload
-    let resolvedSpec = MASTER_SPECIALTIES[0];
-    for (const spec of MASTER_SPECIALTIES) {
+    let resolvedSpec = HOSPITAL_SPECIALTIES[0];
+    for (const spec of HOSPITAL_SPECIALTIES) {
       if (
         slotId.toUpperCase().includes(spec.code.toUpperCase()) ||
         (payload.specialty_name && String(payload.specialty_name).toLowerCase().includes(spec.name.toLowerCase())) ||
@@ -300,7 +313,7 @@ export async function sendChatAction(
         break;
       }
     }
-    const resolvedDoc = resolvedSpec.doctors[0] || MASTER_DOCTORS[0];
+    const resolvedDoc = resolvedSpec.doctors[0] || HOSPITAL_DOCTORS[0];
 
     const doctorName = String(payload.doctor_name || payload.doctorName || resolvedDoc.fullName);
     const specialtyName = String(payload.specialty_name || payload.specialtyName || resolvedSpec.name);

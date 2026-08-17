@@ -10,7 +10,7 @@ import {
   saveLocalAppointment,
 } from "@/lib/api/appointments";
 import type { DetailedAppointment, DetailedPatientSnapshot } from "@/lib/mockData";
-import { MASTER_DOCTORS, MASTER_SPECIALTIES } from "@/lib/clinicalMasterCatalog";
+import { HOSPITAL_DOCTORS, HOSPITAL_SPECIALTIES } from "@/lib/api/hospitalDirectory";
 import {
   Activity,
   BrainCircuit,
@@ -273,7 +273,7 @@ export default function DoctorDashboardPage() {
     setSelectedPatient(null);
   };
 
-  const currentDoctor = MASTER_DOCTORS.find((d) => d.id === selectedDoctorId);
+  const currentDoctor = HOSPITAL_DOCTORS.find((d) => d.id === selectedDoctorId);
   const selectedDetail = getSafePatientDetail(selectedPatient);
 
   return (
@@ -296,7 +296,7 @@ export default function DoctorDashboardPage() {
             <div>
               <h1 className="text-h2 font-bold text-ink-900">Bàn Khám Bác Sĩ &amp; Hồ Sơ Bệnh Án Điện Tử</h1>
               <p className="text-caption text-ink-600">
-                Tiếp nhận bệnh nhân từ AI Triage &amp; Lễ tân điều phối · 17 Chuyên khoa chuẩn VMEC
+                Tiếp nhận bệnh nhân từ AI Triage &amp; Lễ tân điều phối · Đặt lịch trực tuyến VMEC
               </p>
             </div>
           </div>
@@ -312,8 +312,8 @@ export default function DoctorDashboardPage() {
             onChange={(e) => setSelectedDoctorId(e.target.value)}
             className="rounded-xl border border-line bg-bg-soft px-3.5 py-2 text-body font-medium text-ink-900 focus:border-primary-500 focus:outline-none shadow-2xs"
           >
-            <option value="all">🩺 Toàn bộ 17 Chuyên khoa (Tất cả bác sĩ)</option>
-            {MASTER_DOCTORS.map((doc) => (
+            <option value="all">🩺 Toàn bộ Chuyên khoa (Tất cả bác sĩ)</option>
+            {HOSPITAL_DOCTORS.map((doc) => (
               <option key={doc.id} value={doc.id}>
                 👨‍⚕️ {doc.fullName} ({doc.specialtyName} - {doc.room})
               </option>

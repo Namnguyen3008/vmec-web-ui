@@ -1,5 +1,4 @@
 import type { Appointment } from "@/lib/api/contracts";
-import { MASTER_DOCTORS, getDoctorById } from "./clinicalMasterCatalog";
 
 export interface DetailedPatientSnapshot {
   fullName: string;

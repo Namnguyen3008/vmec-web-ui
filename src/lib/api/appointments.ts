@@ -2,7 +2,12 @@ import { apiRequest } from "@/lib/api/client";
 import type { Appointment, AppointmentQr, CheckoutContext, PatientSnapshot } from "@/lib/api/contracts";
 import { list, mapAppointment, mapCheckout } from "@/lib/api/mappers";
 import { MOCK_DOCTOR_APPOINTMENTS, type DetailedAppointment, type DetailedPatientSnapshot } from "@/lib/mockData";
-import { MASTER_SPECIALTIES, MASTER_DOCTORS, getDoctorById, getSpecialtyByCode } from "@/lib/clinicalMasterCatalog";
+import {
+  HOSPITAL_SPECIALTIES,
+  HOSPITAL_DOCTORS,
+  getHospitalDoctorById,
+  getHospitalSpecialtyByCode,
+} from "@/lib/api/hospitalDirectory";
 
 const APPOINTMENTS_STORE_KEY = "vmec.appointments.store";
 
@@ -256,8 +261,8 @@ export async function createAppointment(input: {
     return mapped;
   } catch {
     // Determine doctor and specialty dynamically
-    let resolvedSpec = MASTER_SPECIALTIES[0];
-    for (const spec of MASTER_SPECIALTIES) {
+    let resolvedSpec = HOSPITAL_SPECIALTIES[0];
+    for (const spec of HOSPITAL_SPECIALTIES) {
       if (
         (input.specialtyId && spec.code.toUpperCase() === input.specialtyId.toUpperCase()) ||
         (input.slotId && input.slotId.toUpperCase().includes(spec.code.toUpperCase())) ||
@@ -267,7 +272,7 @@ export async function createAppointment(input: {
         break;
       }
     }
-    const resolvedDoc = resolvedSpec.doctors[0] || MASTER_DOCTORS[0];
+    const resolvedDoc = resolvedSpec.doctors[0] || HOSPITAL_DOCTORS[0];
 
     const doctorId = input.doctorId || resolvedDoc.id;
     const doctorName = input.doctorName || resolvedDoc.fullName;
@@ -334,14 +339,14 @@ export async function createAppointment(input: {
 
 export async function getCheckoutContext(slotId: string): Promise<CheckoutContext> {
   let specialtyCode = "TIM_MACH";
-  for (const spec of MASTER_SPECIALTIES) {
+  for (const spec of HOSPITAL_SPECIALTIES) {
     if (slotId.toUpperCase().includes(spec.code.toUpperCase())) {
       specialtyCode = spec.code;
       break;
     }
   }
-  const spec = getSpecialtyByCode(specialtyCode) || MASTER_SPECIALTIES[0];
-  const doc = spec.doctors[0];
+  const spec = getHospitalSpecialtyByCode(specialtyCode) || HOSPITAL_SPECIALTIES[0];
+  const doc = spec.doctors[0] || HOSPITAL_DOCTORS[0];
 
   return {
     patient: {

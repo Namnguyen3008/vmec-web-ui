@@ -18,7 +18,7 @@ import {
 import { NavBar } from "@/components/landing/NavBar";
 import { Footer } from "@/components/landing/Footer";
 import { Button } from "@/components/ui/Button";
-import { MASTER_SPECIALTIES } from "@/lib/clinicalMasterCatalog";
+import { HOSPITAL_SPECIALTIES } from "@/lib/api/hospitalDirectory";
 
 const services = [
   {
@@ -179,7 +179,7 @@ export default function LandingPage() {
           </div>
 
           <div className="mt-10 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-            {MASTER_SPECIALTIES.map((spec) => (
+            {HOSPITAL_SPECIALTIES.map((spec) => (
               <div
                 key={spec.code}
                 className="bg-surface p-4 rounded-xl border border-line shadow-2xs hover:border-teal-400 hover:shadow-xs transition flex flex-col justify-between"
