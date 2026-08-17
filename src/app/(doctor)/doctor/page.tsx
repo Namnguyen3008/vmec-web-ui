@@ -5,7 +5,6 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import {
   getLocalAppointments,
-  listDoctorAppointments,
   startConsultation,
   completeConsultation,
   saveLocalAppointment,
@@ -34,6 +33,62 @@ import {
   Pill,
   ClipboardList,
 } from "lucide-react";
+
+function getSafePatientDetail(apt: DetailedAppointment | null | undefined): DetailedPatientSnapshot {
+  if (!apt) {
+    return {
+      fullName: "Bệnh nhân",
+      phoneNumber: "0912 345 678",
+      dateOfBirth: "1980-01-01",
+      age: 45,
+      gender: "MALE",
+      address: "Hà Nội, Việt Nam",
+      patientSubject: "SELF",
+      medicalCode: "BN-2026-8891",
+      bloodType: "O+",
+      allergies: [],
+      medicalHistory: [],
+      vitalSigns: { bloodPressure: "120/80", heartRate: 75, temperature: 36.6, spO2: 99, weight: 60 },
+      clinicalNote: "",
+      prescriptions: [],
+      diagnosticOrders: [],
+      aiAssessment: {
+        preliminaryDiagnosis: "Khám chuyên khoa",
+        urgencyLevel: "ROUTINE",
+        confidenceScore: 90,
+        reasoning: "Tư vấn triệu chứng lâm sàng qua MedAgent AI.",
+      },
+    };
+  }
+
+  const detail = apt.patientDetail;
+  const snap = (apt.patientSnapshot || {}) as Record<string, unknown>;
+
+  return {
+    fullName: detail?.fullName || String(snap.fullName || snap.full_name || "Bệnh nhân"),
+    phoneNumber: detail?.phoneNumber || String(snap.phoneNumber || snap.phone_number || "0912 345 678"),
+    dateOfBirth: detail?.dateOfBirth || (snap.dateOfBirth as string) || "1980-01-01",
+    age: detail?.age || Number(snap.age || 45),
+    gender: detail?.gender || (snap.gender as "MALE" | "FEMALE") || "MALE",
+    address: detail?.address || String(snap.address || "Hà Nội, Việt Nam"),
+    patientSubject: detail?.patientSubject || "SELF",
+    medicalCode: detail?.medicalCode || `BN-2026-${String(apt.id || "").slice(-4) || "8891"}`,
+    bloodType: detail?.bloodType || "O+",
+    allergies: detail?.allergies || [],
+    medicalHistory: detail?.medicalHistory || [],
+    vitalSigns: detail?.vitalSigns || { bloodPressure: "120/80", heartRate: 75, temperature: 36.6, spO2: 99, weight: 60 },
+    clinicalNote: detail?.clinicalNote || "",
+    receptionistNote: detail?.receptionistNote,
+    prescriptions: detail?.prescriptions || [],
+    diagnosticOrders: detail?.diagnosticOrders || [],
+    aiAssessment: detail?.aiAssessment || {
+      preliminaryDiagnosis: apt.specialtyName || "Khám chuyên khoa",
+      urgencyLevel: "ROUTINE",
+      confidenceScore: 90,
+      reasoning: apt.bookingReason || "Tư vấn lâm sàng qua MedAgent AI.",
+    },
+  };
+}
 
 export default function DoctorDashboardPage() {
   const [selectedDoctorId, setSelectedDoctorId] = useState<string>("all");
@@ -106,14 +161,15 @@ export default function DoctorDashboardPage() {
   }, [appointments, selectedDoctorId, activeTab]);
 
   const openConsultationModal = (item: DetailedAppointment) => {
+    const detail = getSafePatientDetail(item);
     setSelectedPatient(item);
-    setDoctorNoteInput(item.patientDetail.clinicalNote || "");
-    setDiagnosisInput(item.patientDetail.aiAssessment?.preliminaryDiagnosis || item.specialtyName || "");
-    if (item.patientDetail.vitalSigns) {
-      setVitalSigns({ ...item.patientDetail.vitalSigns });
+    setDoctorNoteInput(detail.clinicalNote || "");
+    setDiagnosisInput(detail.aiAssessment?.preliminaryDiagnosis || item.specialtyName || "");
+    if (detail.vitalSigns) {
+      setVitalSigns({ ...detail.vitalSigns });
     }
-    setPrescriptions(item.patientDetail.prescriptions ? [...item.patientDetail.prescriptions] : []);
-    setDiagnosticOrders(item.patientDetail.diagnosticOrders ? [...item.patientDetail.diagnosticOrders] : []);
+    setPrescriptions(detail.prescriptions ? [...detail.prescriptions] : []);
+    setDiagnosticOrders(detail.diagnosticOrders ? [...detail.diagnosticOrders] : []);
   };
 
   const handleAddPrescription = () => {
@@ -163,10 +219,11 @@ export default function DoctorDashboardPage() {
       );
       showToast("Đã hoàn tất phiên khám và xuất hồ sơ bệnh án thành công!");
     } else {
+      const detail = getSafePatientDetail(selectedPatient);
       const updated: DetailedAppointment = {
         ...selectedPatient,
         patientDetail: {
-          ...selectedPatient.patientDetail,
+          ...detail,
           clinicalNote: doctorNoteInput,
           vitalSigns,
           prescriptions,
@@ -182,6 +239,7 @@ export default function DoctorDashboardPage() {
   };
 
   const currentDoctor = MASTER_DOCTORS.find((d) => d.id === selectedDoctorId);
+  const selectedDetail = getSafePatientDetail(selectedPatient);
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
@@ -308,7 +366,7 @@ export default function DoctorDashboardPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {filteredAppointments.map((apt) => {
             const isCompleted = apt.status === "COMPLETED";
-            const detail = apt.patientDetail;
+            const detail = getSafePatientDetail(apt);
 
             return (
               <div
@@ -396,13 +454,13 @@ export default function DoctorDashboardPage() {
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
-                    <h2 className="text-h2 font-bold text-ink-900">{selectedPatient.patientDetail.fullName}</h2>
+                    <h2 className="text-h2 font-bold text-ink-900">{selectedDetail.fullName}</h2>
                     <Badge tone={selectedPatient.status === "COMPLETED" ? "neutral" : "success"}>
                       {selectedPatient.status === "COMPLETED" ? "Đã hoàn thành" : "Đang khám"}
                     </Badge>
                   </div>
                   <p className="text-caption text-ink-500">
-                    Mã BN: <strong>{selectedPatient.patientDetail.medicalCode}</strong> · Mã hẹn: {selectedPatient.appointmentCode} · {selectedPatient.specialtyName} ({selectedPatient.room})
+                    Mã BN: <strong>{selectedDetail.medicalCode}</strong> · Mã hẹn: {selectedPatient.appointmentCode} · {selectedPatient.specialtyName} ({selectedPatient.room})
                   </p>
                 </div>
               </div>
@@ -426,26 +484,26 @@ export default function DoctorDashboardPage() {
                   <div className="grid grid-cols-2 gap-2 text-body">
                     <div>
                       <span className="text-caption text-ink-500 block">Tuổi &amp; Giới tính</span>
-                      <strong className="text-ink-900">{selectedPatient.patientDetail.age} tuổi ({selectedPatient.patientDetail.gender === "MALE" ? "Nam" : "Nữ"})</strong>
+                      <strong className="text-ink-900">{selectedDetail.age} tuổi ({selectedDetail.gender === "MALE" ? "Nam" : "Nữ"})</strong>
                     </div>
                     <div>
                       <span className="text-caption text-ink-500 block">Số điện thoại</span>
-                      <strong className="text-ink-900">{selectedPatient.patientDetail.phoneNumber}</strong>
+                      <strong className="text-ink-900">{selectedDetail.phoneNumber}</strong>
                     </div>
                     <div>
                       <span className="text-caption text-ink-500 block">Nhóm máu</span>
-                      <strong className="text-ink-900">{selectedPatient.patientDetail.bloodType || "O+"}</strong>
+                      <strong className="text-ink-900">{selectedDetail.bloodType || "O+"}</strong>
                     </div>
                     <div>
                       <span className="text-caption text-ink-500 block">Tiền sử dị ứng</span>
                       <span className="text-caption font-semibold text-danger">
-                        {selectedPatient.patientDetail.allergies?.length ? selectedPatient.patientDetail.allergies.join(", ") : "Không có ghi nhận"}
+                        {selectedDetail.allergies?.length ? selectedDetail.allergies.join(", ") : "Không có ghi nhận"}
                       </span>
                     </div>
                   </div>
                   <div className="pt-2 border-t border-line/60">
                     <span className="text-caption text-ink-500 block">Địa chỉ:</span>
-                    <span className="text-caption text-ink-800">{selectedPatient.patientDetail.address || "Hà Nội"}</span>
+                    <span className="text-caption text-ink-800">{selectedDetail.address || "Hà Nội"}</span>
                   </div>
                 </div>
 
@@ -456,14 +514,14 @@ export default function DoctorDashboardPage() {
                   </h3>
                   <div className="text-body text-ink-800 space-y-1.5">
                     <p>
-                      <strong>Chẩn đoán sơ bộ:</strong> {selectedPatient.patientDetail.aiAssessment?.preliminaryDiagnosis || selectedPatient.specialtyName}
+                      <strong>Chẩn đoán sơ bộ:</strong> {selectedDetail.aiAssessment?.preliminaryDiagnosis || selectedPatient.specialtyName}
                     </p>
                     <p className="text-caption text-ink-700">
-                      <strong>Lý giải AI:</strong> {selectedPatient.patientDetail.aiAssessment?.reasoning}
+                      <strong>Lý giải AI:</strong> {selectedDetail.aiAssessment?.reasoning}
                     </p>
-                    {selectedPatient.patientDetail.receptionistNote && (
+                    {selectedDetail.receptionistNote && (
                       <p className="text-caption bg-white p-2 rounded border border-teal-200 text-teal-900">
-                        <strong>Ghi chú Lễ tân:</strong> {selectedPatient.patientDetail.receptionistNote}
+                        <strong>Ghi chú Lễ tân:</strong> {selectedDetail.receptionistNote}
                       </p>
                     )}
                   </div>

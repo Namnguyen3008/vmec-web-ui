@@ -323,10 +323,10 @@ export default function ApprovalsPage() {
                   </div>
                   <div>
                     <p className="font-bold text-ink-900 text-body-lg">
-                      {String(item.patientSnapshot.full_name || "Bệnh nhân")}
+                      {String(item.patientSnapshot?.full_name || (item.patientSnapshot as Record<string, unknown>)?.fullName || (item as any).patientDetail?.fullName || "Bệnh nhân")}
                     </p>
                     <p className="text-caption text-ink-500">
-                      Mã lịch: <span className="font-semibold text-ink-700">{item.appointmentCode}</span> · SĐT: {String(item.patientSnapshot.phone_number || "Chưa có SĐT")}
+                      Mã lịch: <span className="font-semibold text-ink-700">{item.appointmentCode}</span> · SĐT: {String(item.patientSnapshot?.phone_number || (item.patientSnapshot as Record<string, unknown>)?.phoneNumber || (item as any).patientDetail?.phoneNumber || "Chưa có SĐT")}
                     </p>
                   </div>
                 </div>

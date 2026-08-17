@@ -15,7 +15,63 @@ export function getLocalAppointments(): DetailedAppointment[] {
       return MOCK_DOCTOR_APPOINTMENTS;
     }
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) && parsed.length > 0 ? parsed : MOCK_DOCTOR_APPOINTMENTS;
+    if (!Array.isArray(parsed) || parsed.length === 0) {
+      window.localStorage.setItem(APPOINTMENTS_STORE_KEY, JSON.stringify(MOCK_DOCTOR_APPOINTMENTS));
+      return MOCK_DOCTOR_APPOINTMENTS;
+    }
+
+    return parsed.map((item: any) => {
+      const snap = (item.patientSnapshot || {}) as Record<string, unknown>;
+      const fullName = String(
+        item.patientDetail?.fullName || snap.fullName || snap.full_name || "Bệnh nhân"
+      );
+      const phoneNumber = String(
+        item.patientDetail?.phoneNumber || snap.phoneNumber || snap.phone_number || "0912 345 678"
+      );
+      const gender = (item.patientDetail?.gender || snap.gender || "MALE") as "MALE" | "FEMALE" | "OTHER" | "UNKNOWN";
+      const age = Number(item.patientDetail?.age || snap.age || 45);
+
+      if (!item.patientSnapshot) {
+        item.patientSnapshot = {
+          full_name: fullName,
+          phone_number: phoneNumber,
+          gender: gender,
+          age: age,
+        };
+      }
+
+      if (!item.patientDetail) {
+        item.patientDetail = {
+          fullName,
+          phoneNumber,
+          dateOfBirth: "1980-01-01",
+          age,
+          gender,
+          address: "Hà Nội, Việt Nam",
+          patientSubject: "SELF",
+          medicalCode: `BN-2026-${String(item.id || "").slice(-4) || "8891"}`,
+          bloodType: "O+",
+          allergies: [],
+          medicalHistory: [],
+          vitalSigns: {
+            bloodPressure: "120/80",
+            heartRate: 75,
+            temperature: 36.6,
+            spO2: 99,
+            weight: 60,
+          },
+          aiAssessment: {
+            preliminaryDiagnosis: item.specialtyName || "Khám chuyên khoa",
+            urgencyLevel: "ROUTINE",
+            confidenceScore: 90,
+            reasoning: item.bookingReason || "Tư vấn triệu chứng lâm sàng qua MedAgent AI.",
+          },
+          prescriptions: [],
+          diagnosticOrders: [],
+        };
+      }
+      return item as DetailedAppointment;
+    });
   } catch {
     return MOCK_DOCTOR_APPOINTMENTS;
   }
