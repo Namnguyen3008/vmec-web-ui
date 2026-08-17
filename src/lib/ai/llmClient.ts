@@ -8,10 +8,8 @@ import type {
   JudgeEvaluationResult,
   InterrogatorResult,
   SlotKey,
-  ContextualChipOption,
 } from "./types";
 import { generateContextualChipsForSpecialty } from "./clinicalEvaluator";
-import { SLOT_METADATA } from "./prompts";
 
 export function getNextPendingSlot(slots: ClinicalSlotMatrix): SlotKey | null {
   if (slots.chiefComplaint.status !== "COMPLETED") return "chiefComplaint";
@@ -30,7 +28,6 @@ export function evaluateSlotWithJudge(
 
   switch (targetSlot) {
     case "chiefComplaint": {
-      // Bất kỳ triệu chứng lâm sàng rõ ràng nào đều được coi là SATISFIED
       if (text.length >= 2) {
         return {
           targetSlot,
@@ -45,7 +42,7 @@ export function evaluateSlotWithJudge(
         verdict: "UNSATISFIED",
         clarityScore: 0.2,
         reasoning: "Chưa xác định được vị trí hoặc triệu chứng khó chịu cụ thể.",
-        clarificationPrompt: "Bạn đang cảm thấy khó chịu ở vị trí nào trong cơ thể?",
+        clarificationPrompt: "Bạn đang cảm thấy khó chịu ở vị trí nào trong cơ thể hoặc cần khám vấn đề gì?",
       };
     }
 
@@ -67,9 +64,18 @@ export function evaluateSlotWithJudge(
         text.includes("khi lo") ||
         text.includes("khi leo") ||
         text.includes("sau ăn") ||
+        text.includes("khi đói") ||
+        text.includes("sáng sớm") ||
+        text.includes("đầy bụng") ||
+        text.includes("chướng") ||
+        text.includes("khó tiêu") ||
+        text.includes("chóng mặt") ||
+        text.includes("hoa mắt") ||
+        text.includes("tư thế") ||
         text.includes("khi hít") ||
         text.includes("gắng sức") ||
-        text.length >= 8;
+        text.includes("nôn") ||
+        text.length >= 6;
 
       if (hasCharacter) {
         return {
@@ -84,8 +90,8 @@ export function evaluateSlotWithJudge(
         targetSlot,
         verdict: "UNSATISFIED",
         clarityScore: 0.4,
-        reasoning: "Cần làm rõ cảm giác đau/khó chịu cụ thể (nhói buốt, âm ỉ, thắt nghẹt, rát bỏng hay xuất hiện khi nào).",
-        clarificationPrompt: "Bạn có thể mô tả cụ thể hơn cảm giác khó chịu này (nhói buốt, âm ỉ hay thắt nghẹt) và tăng lên khi nào không?",
+        reasoning: "Cần làm rõ cảm giác khó chịu cụ thể và hoàn cảnh xuất hiện triệu chứng.",
+        clarificationPrompt: "Bạn có thể mô tả cụ thể hơn cảm giác này (xuất hiện khi nào, lúc đói, sau ăn hay khi vận động)?",
       };
     }
 
@@ -128,6 +134,7 @@ export function evaluateSlotWithJudge(
         text.includes("hụt hơi") ||
         text.includes("khó thở") ||
         text.includes("buồn nôn") ||
+        text.includes("nôn") ||
         text.includes("chóng mặt") ||
         text.includes("hồi hộp") ||
         text.includes("run tay") ||
