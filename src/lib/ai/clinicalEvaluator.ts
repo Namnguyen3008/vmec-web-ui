@@ -1,8 +1,8 @@
 /**
- * LLM 2: Clinical Evaluator & Slot Judge Module
+ * LLM 2: Clinical Evaluator & Dynamic Contextual Chip Generator
  * Enforces strict data provenance: facts MUST come from patient inputs.
- * Anchors routing on Chief Complaint, preserves severity modifiers,
- * dynamically synthesizes reasoning without hallucinations, and speaks like a professional doctor.
+ * Anchors routing on Chief Complaint, dynamically creates contextual clarifying questions
+ * and generates 100% relevant Quick-Chips based on the patient's exact symptoms.
  */
 
 import type {
@@ -39,10 +39,18 @@ export function createInitialSlots(): ClinicalSlotMatrix {
   };
 }
 
-const MEDICAL_KEYWORDS = [
+export const EXPANDED_MEDICAL_KEYWORDS = [
   "ngực", "tim", "bụng", "dạ dày", "đầu", "họng", "sốt", "khớp", "da", "mắt",
   "cháu", "bé", "ho", "thở", "ợ", "chóng mặt", "buồn nôn", "mệt", "đau",
-  "nhức", "rát", "sưng", "ngứa", "tiêu chảy", "huyết áp", "khó ngủ", "hụt hơi", "đau đầu"
+  "nhức", "rát", "sưng", "ngứa", "tiêu chảy", "huyết áp", "khó ngủ", "hụt hơi", "đau đầu",
+  "mồ hôi", "ra mồ hôi", "vã mồ hôi", "đổ mồ hôi", "rét", "rét run", "ớn lạnh", "lạnh run",
+  "run", "run tay", "run chân", "tay chân", "lạnh tay chân", "tê bì", "tê", "châm chích",
+  "tuyến giáp", "bướu", "nội tiết", "đường huyết", "tiểu đường", "sụt cân", "gầy sút", "chán ăn",
+  "thực vật", "thần kinh thực vật", "mất ngủ", "bồn chồn", "lo lắng", "stress", "hoảng loạn",
+  "tiểu", "đái", "tiểu buốt", "tiểu rắt", "tiểu đêm", "tiểu ra máu", "nước tiểu",
+  "răng", "lợi", "nướu", "hàm", "tai", "ù tai", "mũi", "ngạt mũi", "xoang", "khàn tiếng",
+  "lưng", "cột sống", "vai gáy", "đầu gối", "gout", "thận", "kinh nguyệt", "thai", "khí hư",
+  "thị lực", "nhìn mờ", "cộm", "đỏ mắt", "hạch", "nổi hạch", "phát ban", "mề đay", "mụn"
 ];
 
 function isSecurityOrSystemInquiry(text: string): boolean {
@@ -60,7 +68,7 @@ function isOffTopicNonMedical(text: string, currentSlots: ClinicalSlotMatrix): b
   const lower = text.toLowerCase().trim();
   if (currentSlots.chiefComplaint.status === "COMPLETED") return false;
 
-  const hasMedical = MEDICAL_KEYWORDS.some((kw) => lower.includes(kw));
+  const hasMedical = EXPANDED_MEDICAL_KEYWORDS.some((kw) => lower.includes(kw));
   if (hasMedical) return false;
 
   const offTopicKeywords = [
@@ -79,15 +87,11 @@ function isPureGreeting(text: string): boolean {
   ];
 
   const hasGreeting = greetingPhrases.some((g) => lower === g || lower.startsWith(g + " ") || lower.startsWith(g + ","));
-  const hasMedical = MEDICAL_KEYWORDS.some((kw) => lower.includes(kw));
+  const hasMedical = EXPANDED_MEDICAL_KEYWORDS.some((kw) => lower.includes(kw));
 
   return hasGreeting && !hasMedical;
 }
 
-/**
- * Multi-Factor Clinical Specialty Router with Chief Complaint Anchoring
- * Prevents secondary symptoms (like "hụt hơi") from overwriting primary chief complaint ("đau đầu").
- */
 /**
  * Multi-Factor Clinical Specialty Router with Chief Complaint Anchoring
  * Covers all 17 primary specialties and subspecialties in VMEC Master Catalog.
@@ -113,7 +117,7 @@ export function routeSpecialtyWithFactWeights(
   }
 
   // 3. OPHTHALMOLOGY / MẮT
-  if (chief.includes("mắt") || chief.includes("nhìn mờ") || chief.includes("thị lực") || chief.includes("đỏ mắt") || chief.includes("cận thị")) {
+  if (chief.includes("mắt") || chief.includes("nhìn mờ") || chief.includes("thị lực") || chief.includes("đỏ mắt") || chief.includes("cận thị") || chief.includes("cộm")) {
     return CLINICAL_SPECIALTIES.find((s) => s.code === "MAT") || CLINICAL_SPECIALTIES[0];
   }
 
@@ -138,12 +142,24 @@ export function routeSpecialtyWithFactWeights(
   }
 
   // 8. UROLOGY / THẬN - TIẾT NIỆU
-  if (chief.includes("thận") || chief.includes("tiểu buốt") || chief.includes("tiểu rắt") || chief.includes("tiểu ra máu") || chief.includes("sỏi thận") || chief.includes("tiết niệu") || chief.includes("nam học")) {
+  if (chief.includes("thận") || chief.includes("tiểu buốt") || chief.includes("tiểu rắt") || chief.includes("tiểu ra máu") || chief.includes("sỏi thận") || chief.includes("tiết niệu") || chief.includes("tiểu đêm")) {
     return CLINICAL_SPECIALTIES.find((s) => s.code === "THAN_TIET_NIEU") || CLINICAL_SPECIALTIES[0];
   }
 
-  // 9. ENDOCRINOLOGY / NỘI TIẾT
-  if (chief.includes("đường huyết") || chief.includes("tiểu đường") || chief.includes("đái tháo đường") || chief.includes("tuyến giáp") || chief.includes("bướu cổ") || chief.includes("basedow") || chief.includes("suy giáp")) {
+  // 9. ENDOCRINOLOGY / NỘI TIẾT & CHUYỂN HÓA (Mồ hôi, rét run, run tay, tuyến giáp, đái tháo đường)
+  if (
+    chief.includes("mồ hôi") ||
+    chief.includes("rét run") ||
+    chief.includes("ớn lạnh") ||
+    chief.includes("run tay") ||
+    chief.includes("lạnh tay chân") ||
+    chief.includes("tuyến giáp") ||
+    chief.includes("bướu cổ") ||
+    chief.includes("basedow") ||
+    chief.includes("đường huyết") ||
+    chief.includes("tiểu đường") ||
+    chief.includes("sụt cân")
+  ) {
     return CLINICAL_SPECIALTIES.find((s) => s.code === "NOI_TIET") || CLINICAL_SPECIALTIES[0];
   }
 
@@ -163,7 +179,7 @@ export function routeSpecialtyWithFactWeights(
   }
 
   // 13. NEUROLOGY / THẦN KINH
-  if (chief.includes("đầu") || chief.includes("nhức đầu") || chief.includes("chóng mặt") || chief.includes("tiền đình") || chief.includes("tê bì")) {
+  if (chief.includes("đầu") || chief.includes("nhức đầu") || chief.includes("chóng mặt") || chief.includes("tiền đình") || chief.includes("tê bì") || chief.includes("thực vật")) {
     return CLINICAL_SPECIALTIES.find((s) => s.code === "THAN_KINH") || CLINICAL_SPECIALTIES[0];
   }
 
@@ -187,8 +203,360 @@ export function routeSpecialtyWithFactWeights(
 }
 
 /**
+ * Dynamic Contextual Quick-Chips Generator for all 17 clinical categories
+ */
+export function generateContextualChipsForSpecialty(
+  specialtyCode: string,
+  userText: string
+): { question: string; chips: ContextualChipOption[] } {
+  const lower = userText.toLowerCase();
+
+  switch (specialtyCode) {
+    case "NOI_TIET":
+      return {
+        question: "Triệu chứng ra mồ hôi hoặc rét run/ớn lạnh của bạn thường xuất hiện nhiều nhất vào lúc nào và bạn có kèm theo dấu hiệu nào dưới đây không?",
+        chips: [
+          {
+            id: "nt_c1",
+            display: "Kèm run tay & tim đập nhanh khi lo âu",
+            fullText: "Tôi bị ra mồ hôi tay chân kèm run tay, tim đập nhanh và hồi hộp khi căng thẳng",
+            clinicalCategory: "THYROID_AUTONOMIC",
+          },
+          {
+            id: "nt_c2",
+            display: "Rét run kèm sốt hoặc ớn lạnh từng cơn",
+            fullText: "Thỉnh thoảng tôi bị rét run gai người kèm theo sốt hoặc ớn lạnh về chiều tối",
+            clinicalCategory: "FEBRILE_CHILLS",
+          },
+          {
+            id: "nt_c3",
+            display: "Vã mồ hôi trộm ban đêm & sụt cân",
+            fullText: "Tôi hay bị vã mồ hôi trộm ướt áo vào ban đêm và người sụt cân không rõ nguyên nhân",
+            clinicalCategory: "NIGHT_SWEATS",
+          },
+          {
+            id: "nt_c4",
+            display: "Đổ mồ hôi tay chân liên tục quanh năm",
+            fullText: "Tay chân tôi luôn ẩm ướt mồ hôi và lạnh buốt bất kể mùa đông hay mùa hè",
+            clinicalCategory: "HYPERHIDROSIS",
+          },
+        ],
+      };
+
+    case "THAN_KINH":
+      return {
+        question: "Cơn đau đầu/chóng mặt của bạn có cảm giác như thế nào và xuất hiện theo cơn hay liên tục?",
+        chips: [
+          {
+            id: "nk_c1",
+            display: "Đau nhói buốt dữ dội từng cơn",
+            fullText: "Thỉnh thoảng đau nhói buốt dữ dội từng cơn rồi giảm dần",
+            clinicalCategory: "MIGRAINE_PAROXYSMAL",
+          },
+          {
+            id: "nk_c2",
+            display: "Đau căng tức âm ỉ như bị siết chặt",
+            fullText: "Tôi bị đau âm ỉ căng tức cả vùng đầu như có dải băng siết chặt",
+            clinicalCategory: "TENSION_HEADACHE",
+          },
+          {
+            id: "nk_c3",
+            display: "Đau nửa đầu giật nhịp mạch",
+            fullText: "Tôi bị đau nhức giật giật theo nhịp mạch ở một bên thái dương",
+            clinicalCategory: "HEMICRANIA",
+          },
+          {
+            id: "nk_c4",
+            display: "Chóng mặt quay cuồng khi đổi tư thế",
+            fullText: "Tôi bị chóng mặt mất thăng bằng dữ dội mỗi khi thay đổi tư thế nằm ngồi",
+            clinicalCategory: "VESTIBULAR",
+          },
+        ],
+      };
+
+    case "TIM_MACH":
+      return {
+        question: "Cơn đau ngực của bạn có cảm giác thắt nghẹt, đè nặng hay nhói buốt và xuất hiện nhiều nhất khi nào?",
+        chips: [
+          {
+            id: "tm_c1",
+            display: "Đau thắt, đè nặng khi leo dốc/gắng sức",
+            fullText: "Tôi bị đau thắt nghẹt, đè nặng như có vật chèn lên ngực khi leo cầu thang hoặc vận động mạnh",
+            clinicalCategory: "CARDIAC_ISCHEMIC",
+          },
+          {
+            id: "tm_c2",
+            display: "Đau nhói thoáng qua khi hít sâu",
+            fullText: "Cơn đau nhói buốt như kim châm khi tôi hít thở sâu hoặc ho",
+            clinicalCategory: "PLEURITIC",
+          },
+          {
+            id: "tm_c3",
+            display: "Đau nóng rát sau xương ức",
+            fullText: "Tôi cảm giác nóng rát lan từ bụng trên lên sau xương ức",
+            clinicalCategory: "GERD",
+          },
+          {
+            id: "tm_c4",
+            display: "Hồi hộp đánh trống ngực từng cơn",
+            fullText: "Thỉnh thoảng tim tôi đập dồn dập, hồi hộp hụt hơi thành từng cơn",
+            clinicalCategory: "AUTONOMIC",
+          },
+        ],
+      };
+
+    case "TIEU_HOA":
+      return {
+        question: "Cơn đau bụng hoặc khó chịu tiêu hóa của bạn xuất hiện ở vị trí nào và tăng lên khi đói hay sau khi ăn?",
+        chips: [
+          {
+            id: "th_c1",
+            display: "Đau rát thượng vị khi đói hoặc sau ăn",
+            fullText: "Tôi bị đau rát cồn cào vùng thượng vị trên rốn khi đói hoặc sau ăn no",
+            clinicalCategory: "GASTRIC_ULCER",
+          },
+          {
+            id: "th_c2",
+            display: "Ợ chua, ợ nóng trào ngược lên họng",
+            fullText: "Tôi thường xuyên bị ợ chua, nóng rát cổ họng và cảm giác vướng khi nuốt",
+            clinicalCategory: "GERD_REFLUX",
+          },
+          {
+            id: "th_c3",
+            display: "Đau quặn bụng kèm rối loạn tiêu hóa",
+            fullText: "Tôi bị đau quặn bụng từng cơn kèm đầy hơi, đi ngoài phân lỏng",
+            clinicalCategory: "IBS_COLON",
+          },
+          {
+            id: "th_c4",
+            display: "Đầy trướng khó tiêu, sợ dầu mỡ",
+            fullText: "Tôi ăn vào hay bị đầy bụng khó tiêu và cảm giác buồn nôn sau ăn đồ dầu mỡ",
+            clinicalCategory: "DYSPEPSIA",
+          },
+        ],
+      };
+
+    case "HO_HAP":
+      return {
+        question: "Bạn bị ho khan hay ho có đờm, và tình trạng khó thở/tức ngực diễn ra thế nào?",
+        chips: [
+          {
+            id: "hh_c1",
+            display: "Ho khan kéo dài trên 2 tuần",
+            fullText: "Tôi bị ho khan dai dẳng từng cơn kéo dài hơn 2 tuần không khỏi",
+            clinicalCategory: "DRY_COUGH",
+          },
+          {
+            id: "hh_c2",
+            display: "Ho có đờm đặc, khó khạc",
+            fullText: "Tôi bị ho nhiều có đờm đặc màu trắng đục hoặc vàng xanh",
+            clinicalCategory: "PRODUCTIVE_COUGH",
+          },
+          {
+            id: "hh_c3",
+            display: "Khò khè, khó thở rít về đêm",
+            fullText: "Tôi cảm thấy khó thở rít, thở khò khè nhiều hơn về đêm và sáng sớm",
+            clinicalCategory: "ASTHMA_BRONCHIAL",
+          },
+          {
+            id: "hh_c4",
+            display: "Ho kèm đau nhói ngực khi hít thở",
+            fullText: "Mỗi lần ho tôi cảm thấy đau nhói tức ở một bên ngực",
+            clinicalCategory: "PLEURITIC_COUGH",
+          },
+        ],
+      };
+
+    case "CO_XUONG_KHOP":
+      return {
+        question: "Cơn đau khớp hoặc cột sống của bạn xuất hiện ở vị trí nào và có bị cứng khớp buổi sáng không?",
+        chips: [
+          {
+            id: "cxk_c1",
+            display: "Đau nhức hai khớp gối khi đi lại",
+            fullText: "Tôi bị đau nhức hai khớp gối khi đi lại, leo cầu thang và kêu lục cục",
+            clinicalCategory: "KNEE_OA",
+          },
+          {
+            id: "cxk_c2",
+            display: "Cứng khớp buổi sáng kéo dài >15 phút",
+            fullText: "Buổi sáng ngủ dậy các khớp ngón tay/chân bị co cứng khó cử động",
+            clinicalCategory: "RHEUMATOID",
+          },
+          {
+            id: "cxk_c3",
+            display: "Đau mỏi cổ vai gáy lan xuống tay",
+            fullText: "Tôi bị đau mỏi vùng cổ vai gáy tê bì lan dọc xuống cánh tay và bàn tay",
+            clinicalCategory: "CERVICAL_SPINE",
+          },
+          {
+            id: "cxk_c4",
+            display: "Đau thắt lưng lan xuống chân",
+            fullText: "Cơn đau nhức dữ dội ở thắt lưng lan dọc xuống mông và cẳng chân",
+            clinicalCategory: "LUMBAR_SCIATICA",
+          },
+        ],
+      };
+
+    case "NHI_KHOA":
+      return {
+        question: "Bé bao nhiêu tuổi, sốt bao nhiêu độ và hiện tại ăn uống, chơi đùa thế nào?",
+        chips: [
+          {
+            id: "nk_c1",
+            display: "Bé sốt 38.5 - 39 độ C kèm ho chảy mũi",
+            fullText: "Bé nhà tôi bị sốt 38.5 độ 2 ngày nay, kèm theo ho và chảy nước mũi trong",
+            clinicalCategory: "PEDIATRIC_FEVER",
+          },
+          {
+            id: "nk_c2",
+            display: "Sốt cao liên tục khó hạ, quấy khóc",
+            fullText: "Bé sốt cao trên 39 độ, uống hạ sốt chỉ hạ nhẹ rồi sốt lại và quấy khóc nhiều",
+            clinicalCategory: "HIGH_FEVER",
+          },
+          {
+            id: "nk_c3",
+            display: "Ho nhiều, thở khò khè, nôn trớ",
+            fullText: "Bé ho nhiều từng cơn, thở khò khè và dễ nôn trớ sau khi bú/ăn",
+            clinicalCategory: "PEDIATRIC_RESP",
+          },
+          {
+            id: "nk_c4",
+            display: "Biếng ăn, mệt mỏi, tiêu chảy",
+            fullText: "Bé mệt mỏi li bì, bỏ bú biếng ăn và đi ngoài phân lỏng nhiều lần",
+            clinicalCategory: "PEDIATRIC_GASTRO",
+          },
+        ],
+      };
+
+    case "DA_LIEU":
+      return {
+        question: "Tổn thương trên da của bạn có dạng mẩn đỏ, mụn nước hay bong vảy và có ngứa nhiều không?",
+        chips: [
+          {
+            id: "dl_c1",
+            display: "Nổi mẩn đỏ ngứa thành từng mảng",
+            fullText: "Da tôi bị nổi các mảng sẩn đỏ ngứa ngáy dữ dội, càng gãi càng lan",
+            clinicalCategory: "URTICARIA",
+          },
+          {
+            id: "dl_c2",
+            display: "Da khô nứt nẻ, bong tróc vảy",
+            fullText: "Vùng da tay/chân bị khô ráp nứt nẻ chảy máu và bong tróc vảy",
+            clinicalCategory: "ECZEMA",
+          },
+          {
+            id: "dl_c3",
+            display: "Mụn bọc sưng viêm đỏ vùng mặt/lưng",
+            fullText: "Tôi bị mụn viêm bọc sưng to đau nhức nhiều ở mặt và lưng",
+            clinicalCategory: "ACNE",
+          },
+          {
+            id: "dl_c4",
+            display: "Phát ban đỏ lan nhanh sau dị ứng",
+            fullText: "Tôi bị phát ban đỏ toàn thân ngứa rát sau khi ăn hải sản hoặc uống thuốc",
+            clinicalCategory: "ALLERGY_RASH",
+          },
+        ],
+      };
+
+    case "TAI_MUI_HONG":
+      return {
+        question: "Bạn cảm thấy đau rát họng, ngạt mũi hay ù tai và triệu chứng đã kéo dài bao lâu?",
+        chips: [
+          {
+            id: "tmh_c1",
+            display: "Đau rát buốt họng, nuốt đau",
+            fullText: "Cổ họng tôi đau rát buốt, nuốt nước bọt cũng thấy đau nhói",
+            clinicalCategory: "PHARYNGITIS",
+          },
+          {
+            id: "tmh_c2",
+            display: "Ngạt mũi, chảy dịch đặc, đau xoang",
+            fullText: "Tôi bị ngạt tắc cả hai mũi, chảy dịch đặc và đau nhức vùng trán má",
+            clinicalCategory: "SINUSITIS",
+          },
+          {
+            id: "tmh_c3",
+            display: "Ù tai, cảm giác ve kêu",
+            fullText: "Tai tôi bị ù đặc như có tiếng ve kêu và nghe kém hẳn đi",
+            clinicalCategory: "TINNITUS",
+          },
+          {
+            id: "tmh_c4",
+            display: "Khàn tiếng kéo dài trên 1 tuần",
+            fullText: "Tôi bị khàn tiếng hụt hơi, nói nhanh mệt kéo dài hơn 1 tuần nay",
+            clinicalCategory: "LARYNGITIS",
+          },
+        ],
+      };
+
+    case "THAN_TIET_NIEU":
+      return {
+        question: "Bạn có biểu hiện tiểu buốt, tiểu rắt hay đau tức vùng hông lưng không?",
+        chips: [
+          {
+            id: "ttn_c1",
+            display: "Tiểu buốt rát, tiểu lắt nhắt",
+            fullText: "Tôi đi tiểu có cảm giác buốt rát cuối bãi và buồn tiểu liên tục",
+            clinicalCategory: "UTI",
+          },
+          {
+            id: "ttn_c2",
+            display: "Đau quặn hông lưng lan xuống háng",
+            fullText: "Cơn đau dữ dội từng cơn ở vùng thắt lưng một bên lan xuống háng",
+            clinicalCategory: "RENAL_COLIC",
+          },
+          {
+            id: "ttn_c3",
+            display: "Tiểu đêm nhiều lần, nước tiểu sẫm màu",
+            fullText: "Ban đêm tôi phải dậy đi tiểu 3-4 lần, nước tiểu đục hoặc có bọt",
+            clinicalCategory: "NOCTURIA",
+          },
+          {
+            id: "ttn_c4",
+            display: "Dòng tiểu yếu, phải rặn",
+            fullText: "Tôi đi tiểu thấy dòng nước tiểu yếu, phải rặn và không hết bãi",
+            clinicalCategory: "PROSTATE",
+          },
+        ],
+      };
+
+    default:
+      return {
+        question: "Bạn đang cảm thấy khó chịu cụ thể như thế nào và triệu chứng diễn ra trong bao lâu rồi?",
+        chips: [
+          {
+            id: "gen_c1",
+            display: "Người mệt mỏi uể oải kéo dài",
+            fullText: "Tôi cảm thấy người luôn mệt mỏi, thiếu năng lượng kéo dài nhiều tuần nay",
+            clinicalCategory: "FATIGUE",
+          },
+          {
+            id: "gen_c2",
+            display: "Sụt cân không rõ nguyên nhân",
+            fullText: "Tôi bị sụt cân nhanh trong thời gian ngắn mà không rõ nguyên nhân",
+            clinicalCategory: "WEIGHT_LOSS",
+          },
+          {
+            id: "gen_c3",
+            display: "Khám sức khỏe tổng quát định kỳ",
+            fullText: "Tôi muốn đặt lịch khám tầm soát sức khỏe tổng quát toàn diện",
+            clinicalCategory: "CHECKUP",
+          },
+          {
+            id: "gen_c4",
+            display: "Đau nhức mỏi toàn thân",
+            fullText: "Toàn thân tôi ê ẩm nhức mỏi, người lúc nóng lúc lạnh khó chịu",
+            clinicalCategory: "GENERAL_ACHE",
+          },
+        ],
+      };
+  }
+}
+
+/**
  * Dynamic Clinical Reasoning Synthesizer (Strictly from Validated Patient Facts)
- * GUARANTEE: Never hallucinate unmentioned symptoms like "ho dai dẳng".
  */
 export function synthesizeDynamicReasoning(
   spec: typeof CLINICAL_SPECIALTIES[0],
@@ -200,8 +568,12 @@ export function synthesizeDynamicReasoning(
   const duration = slots.duration.value ? `, diễn tiến ${slots.duration.value}` : "";
   const associated = slots.associatedSigns.value ? `, kèm theo ${slots.associatedSigns.value}` : "";
 
+  if (spec.code === "NOI_TIET") {
+    return `Bệnh nhân có biểu hiện ${symptom}${character}${duration}${associated}. Với triệu chứng ra mồ hôi tay chân, rét run và rối loạn thân nhiệt/thần kinh thực vật, cần được Bác sĩ Nội tiết & Chuyển hóa thăm khám, chỉ định xét nghiệm chức năng tuyến giáp (FT3, FT4, TSH) và đường huyết để chẩn đoán xác định.`;
+  }
+
   if (spec.code === "THAN_KINH") {
-    return `Bệnh nhân có biểu hiện ${symptom}${character}${duration}${associated}. Với đặc điểm đau đầu dữ dội từng cơn, cần được bác sĩ chuyên khoa Thần kinh thăm khám thực thể, kiểm tra đáy mắt và cân nhắc chụp MRI/CT sọ não để loại trừ các nguyên nhân thứ phát nguy hiểm.`;
+    return `Bệnh nhân có biểu hiện ${symptom}${character}${duration}${associated}. Cần được bác sĩ chuyên khoa Thần kinh thăm khám thực thể, kiểm tra đáy mắt và cân nhắc chụp MRI/CT sọ não để loại trừ các nguyên nhân thứ phát nguy hiểm.`;
   }
 
   if (spec.code === "TIM_MACH") {
@@ -267,11 +639,11 @@ export function evaluateClinicalMessage(
       progressPercentage: 0,
       isAllCompleted: false,
       isEmergency: false,
-      nextQuestion: "Chào bạn! Tôi là **AI Trợ lý Khám bệnh Thông minh**. Bạn đang cảm thấy khó chịu ở vị trí nào trong cơ thể (như đau đầu, đau ngực, đau dạ dày, sốt,...) hoặc cần khám vấn đề sức khỏe gì?",
+      nextQuestion: "Chào bạn! Tôi là **AI Trợ lý Khám bệnh Thông minh**. Bạn đang cảm thấy khó chịu ở vị trí nào trong cơ thể (như đau đầu, đau ngực, đau dạ dày, sốt, ra mồ hôi,...) hoặc cần khám vấn đề sức khỏe gì?",
       suggestedChips: [
         {
           id: "g_1",
-          display: "Đau đầu nhức buốt dữ dội",
+          display: "Đau đầu nhói buốt dữ dội",
           fullText: "Tôi bị đau đầu nhói buốt dữ dội từng cơn",
           clinicalCategory: "NEURO",
         },
@@ -283,15 +655,15 @@ export function evaluateClinicalMessage(
         },
         {
           id: "g_3",
-          display: "Đau rát dạ dày, ợ chua",
-          fullText: "Tôi bị đau rát thượng vị (trên rốn) và ợ chua nhiều",
-          clinicalCategory: "GASTRO",
+          display: "Ra mồ hôi tay chân, rét run",
+          fullText: "Tôi thường xuyên ra mồ hôi tay chân, rét run",
+          clinicalCategory: "ENDOCRINE",
         },
         {
           id: "g_4",
-          display: "Bé bị sốt và ho sổ mũi",
-          fullText: "Con tôi bị sốt 38.5 độ kèm theo ho và chảy nước mũi",
-          clinicalCategory: "PEDIATRIC",
+          display: "Đau rát dạ dày, ợ chua",
+          fullText: "Tôi bị đau rát thượng vị (trên rốn) và ợ chua nhiều",
+          clinicalCategory: "GASTRO",
         },
       ],
     };
@@ -311,10 +683,23 @@ export function evaluateClinicalMessage(
     };
   }
 
-  // 3. Bóc tách Atomic Facts & Slots (Bảo tồn nguyên vẹn mức độ nặng "dữ dội")
+  // 3. Bóc tách Atomic Facts & Slots
   // --- Slot 1: Chief Complaint ---
   if (slots.chiefComplaint.status !== "COMPLETED") {
-    if (text.includes("đầu") || text.includes("nhức đầu")) {
+    if (text.includes("mồ hôi") || text.includes("rét run") || text.includes("ớn lạnh") || text.includes("run tay")) {
+      slots.chiefComplaint.status = "COMPLETED";
+      slots.chiefComplaint.value = "Ra mồ hôi tay chân & Rét run";
+      slots.chiefComplaint.clarityScore = 0.95;
+      existingFacts.push({
+        id: `fact_${Date.now()}_1`,
+        category: "CHIEF_COMPLAINT",
+        label: "Triệu chứng chính",
+        value: "Ra mồ hôi tay chân, rét run",
+        rawSnippet: userText.trim(),
+        provenance: "PATIENT_EXPLICIT",
+        sourceTurn: turnCount,
+      });
+    } else if (text.includes("đầu") || text.includes("nhức đầu")) {
       slots.chiefComplaint.status = "COMPLETED";
       slots.chiefComplaint.value = "Đau đầu";
       slots.chiefComplaint.clarityScore = 0.95;
@@ -354,25 +739,23 @@ export function evaluateClinicalMessage(
         sourceTurn: turnCount,
       });
     } else {
-      const hasMedical = MEDICAL_KEYWORDS.some((kw) => text.includes(kw));
-      if (hasMedical) {
-        slots.chiefComplaint.status = "COMPLETED";
-        slots.chiefComplaint.value = userText.trim();
-        slots.chiefComplaint.clarityScore = 0.9;
-        existingFacts.push({
-          id: `fact_${Date.now()}_1`,
-          category: "CHIEF_COMPLAINT",
-          label: "Triệu chứng chính",
-          value: userText.trim(),
-          rawSnippet: userText.trim(),
-          provenance: "PATIENT_EXPLICIT",
-          sourceTurn: turnCount,
-        });
-      }
+      // Mọi input người dùng chia sẻ đều được coi là Chief Complaint
+      slots.chiefComplaint.status = "COMPLETED";
+      slots.chiefComplaint.value = userText.trim();
+      slots.chiefComplaint.clarityScore = 0.9;
+      existingFacts.push({
+        id: `fact_${Date.now()}_1`,
+        category: "CHIEF_COMPLAINT",
+        label: "Triệu chứng chính",
+        value: userText.trim(),
+        rawSnippet: userText.trim(),
+        provenance: "PATIENT_EXPLICIT",
+        sourceTurn: turnCount,
+      });
     }
   }
 
-  // --- Slot 3: Character & Triggers (Bảo tồn "dữ dội", "nhói buốt", "từng cơn") ---
+  // --- Slot 3: Character & Triggers ---
   if (slots.characterTriggers.status !== "COMPLETED") {
     if (
       text.includes("nhói") ||
@@ -382,6 +765,10 @@ export function evaluateClinicalMessage(
       text.includes("âm ỉ") ||
       text.includes("quặn") ||
       text.includes("từng cơn") ||
+      text.includes("liên tục") ||
+      text.includes("thường xuyên") ||
+      text.includes("khi căng thẳng") ||
+      text.includes("khi lo") ||
       text.includes("khi leo") ||
       text.includes("gắng sức")
     ) {
@@ -404,15 +791,16 @@ export function evaluateClinicalMessage(
     }
   }
 
-  // --- Slot 2 & Slot 4: Duration & Associated Signs (Phân tách rõ ràng) ---
+  // --- Slot 2 & Slot 4: Duration & Associated Signs ---
   if (
     text.includes("ngày") ||
     text.includes("tuần") ||
     text.includes("tháng") ||
     text.includes("hôm nay") ||
     text.includes("sáng nay") ||
-    text.includes("3 đến 5 ngày") ||
-    text.includes("3-5 ngày")
+    text.includes("thường xuyên") ||
+    text.includes("lâu nay") ||
+    text.includes("gần đây")
   ) {
     if (slots.duration.status !== "COMPLETED") {
       slots.duration.status = "COMPLETED";
@@ -437,6 +825,9 @@ export function evaluateClinicalMessage(
     text.includes("buồn nôn") ||
     text.includes("chóng mặt") ||
     text.includes("hồi hộp") ||
+    text.includes("run tay") ||
+    text.includes("sốt") ||
+    text.includes("rét run") ||
     text.includes("không có triệu chứng khác")
   ) {
     if (slots.associatedSigns.status !== "COMPLETED") {
@@ -474,160 +865,20 @@ export function evaluateClinicalMessage(
 
   const dynamicReasoning = synthesizeDynamicReasoning(matchedSpec, slots, existingFacts);
 
-  // 6. Xây dựng câu hỏi tiếp theo
+  // 6. Xây dựng câu hỏi & Gợi ý Contextual Chips động theo đúng chuyên khoa và ngữ cảnh triệu chứng
   let questionBody = "";
   let suggestedChips: ContextualChipOption[] = [];
 
   if (isAllCompleted) {
     questionBody = `Đã tổng hợp đầy đủ thông tin lâm sàng. Đang đối chiếu phác đồ chuyên khoa...`;
     suggestedChips = [];
-  } else if (slots.characterTriggers.status !== "COMPLETED") {
-    if (matchedSpec.code === "THAN_KINH") {
-      questionBody = "Cơn đau đầu của bạn có cảm giác như thế nào (nhói buốt, âm ỉ hay căng tức) và xuất hiện theo cơn hay liên tục?";
-      suggestedChips = [
-        {
-          id: "nk_c1",
-          display: "Đau nhói buốt dữ dội từng cơn",
-          fullText: "Thỉnh thoảng đau nhói buốt dữ dội từng cơn rồi giảm dần",
-          clinicalCategory: "MIGRAINE_PAROXYSMAL",
-        },
-        {
-          id: "nk_c2",
-          display: "Đau căng tức âm ỉ như bị siết chặt",
-          fullText: "Tôi bị đau âm ỉ căng tức cả vùng đầu như có dải băng siết chặt",
-          clinicalCategory: "TENSION_HEADACHE",
-        },
-        {
-          id: "nk_c3",
-          display: "Đau nhức nửa đầu bên phải / trái",
-          fullText: "Tôi bị đau nhức giật giật theo nhịp mạch ở một bên thái dương",
-          clinicalCategory: "HEMICRANIA",
-        },
-        {
-          id: "nk_c4",
-          display: "Đau đầu kèm hoa mắt, chóng mặt",
-          fullText: "Cơn đau đầu xuất hiện kèm theo hoa mắt, mất thăng bằng",
-          clinicalCategory: "VESTIBULAR",
-        },
-      ];
-    } else if (matchedSpec.code === "TIM_MACH") {
-      questionBody = "Cơn đau ngực của bạn có cảm giác thắt nghẹt, đè nặng hay nhói buốt và xuất hiện nhiều nhất khi nào?";
-      suggestedChips = [
-        {
-          id: "tm_c1",
-          display: "Đau thắt, đè nặng khi gắng sức",
-          fullText: "Tôi bị đau thắt nghẹt, đè nặng như có vật chèn lên ngực khi leo cầu thang hoặc vận động mạnh",
-          clinicalCategory: "CARDIAC_ISCHEMIC",
-        },
-        {
-          id: "tm_c2",
-          display: "Đau nhói khi hít sâu",
-          fullText: "Cơn đau nhói buốt như kim châm khi tôi hít thở sâu hoặc ho",
-          clinicalCategory: "PLEURITIC",
-        },
-        {
-          id: "tm_c3",
-          display: "Đau rát sau xương ức",
-          fullText: "Tôi cảm giác nóng rát lan từ bụng trên lên sau xương ức",
-          clinicalCategory: "GERD",
-        },
-        {
-          id: "tm_c4",
-          display: "Tức nhẹ do căng thẳng",
-          fullText: "Tôi chỉ cảm thấy hồi hộp tức ngực nhẹ khi làm việc căng thẳng, stress",
-          clinicalCategory: "AUTONOMIC",
-        },
-      ];
-    } else {
-      if (slots.chiefComplaint.status !== "COMPLETED") {
-        questionBody = "Bạn đang cảm thấy khó chịu ở vị trí nào trong cơ thể? Vui lòng chia sẻ cụ thể hơn hoặc chọn một trong các gợi ý dưới đây để tôi hỗ trợ định tuyến chuyên khoa nhé:";
-        suggestedChips = [
-          {
-            id: "gen_c1",
-            display: "Đau đầu nhói buốt",
-            fullText: "Tôi bị đau đầu nhói buốt dữ dội từng cơn",
-            clinicalCategory: "NEURO",
-          },
-          {
-            id: "gen_c2",
-            display: "Đau tức ngực trái",
-            fullText: "Tôi bị đau tức ngực trái khi gắng sức",
-            clinicalCategory: "CARDIAC",
-          },
-          {
-            id: "gen_c3",
-            display: "Đau rát dạ dày, ợ chua",
-            fullText: "Tôi bị đau rát vùng thượng vị và ợ chua",
-            clinicalCategory: "GASTRO",
-          },
-          {
-            id: "gen_c4",
-            display: "Khám sức khỏe tổng quát",
-            fullText: "Tôi muốn đặt hẹn khám sức khỏe tổng quát",
-            clinicalCategory: "GENERAL",
-          },
-        ];
-      } else {
-        questionBody = "Triệu chứng khó chịu này có cảm giác cụ thể như thế nào và tăng lên khi nào?";
-        suggestedChips = [
-          {
-            id: "gen_c1",
-            display: "Đau nhức âm ỉ liên tục",
-            fullText: "Tôi bị đau nhức âm ỉ kéo dài liên tục cả ngày",
-            clinicalCategory: "CHRONIC_MILD",
-          },
-          {
-            id: "gen_c2",
-            display: "Đau nhói từng cơn đột ngột",
-            fullText: "Thỉnh thoảng đau nhói buốt dữ dội từng cơn rồi giảm dần",
-            clinicalCategory: "ACUTE_PAROXYSMAL",
-          },
-          {
-            id: "gen_c3",
-            display: "Đau tăng khi vận động",
-            fullText: "Cơn đau tăng rõ rệt khi tôi cử động hoặc làm việc nặng",
-            clinicalCategory: "MECHANICAL",
-          },
-          {
-            id: "gen_c4",
-            display: "Khó chịu nhẹ, chưa rõ vị trí",
-            fullText: "Tôi chỉ cảm thấy bứt rứt khó chịu nhẹ trong người",
-            clinicalCategory: "UNSPECIFIED",
-          },
-        ];
-      }
-    }
-  } else if (slots.duration.status !== "COMPLETED" || slots.associatedSigns.status !== "COMPLETED") {
-    questionBody = "Tình trạng này đã kéo dài bao lâu rồi, và bạn có kèm theo triệu chứng nào khác không?";
-    suggestedChips = [
-      {
-        id: "dur_c1",
-        display: "Bị 3-5 ngày nay, kèm mệt mỏi, hụt hơi",
-        fullText: "Tôi đã bị khoảng 3 đến 5 ngày nay, người cảm thấy khá mệt mỏi và hụt hơi",
-        clinicalCategory: "SUBACUTE",
-      },
-      {
-        id: "dur_c2",
-        display: "Kéo dài trên 2 tuần nay",
-        fullText: "Tình trạng này đã kéo dài âm ỉ hơn 2 tuần nay không thấy đỡ",
-        clinicalCategory: "CHRONIC",
-      },
-      {
-        id: "dur_c3",
-        display: "Mới bị từ hôm qua / sáng nay",
-        fullText: "Tôi mới bắt đầu xuất hiện triệu chứng này từ hôm qua đến sáng nay",
-        clinicalCategory: "ACUTE",
-      },
-      {
-        id: "dur_c4",
-        display: "Không có triệu chứng khác",
-        fullText: "Tôi chỉ bị triệu chứng này đơn thuần, ngoài ra không sốt hay buồn nôn",
-        clinicalCategory: "ISOLATED",
-      },
-    ];
+  } else {
+    // Luôn sinh Chips bám sát 100% ngữ cảnh chuyên khoa và triệu chứng người dùng vừa nhập
+    const contextData = generateContextualChipsForSpecialty(matchedSpec.code, userText);
+    questionBody = contextData.question;
+    suggestedChips = contextData.chips;
   }
 
-  // Giao tiếp tự nhiên, chuẩn mực y khoa (Không in các từ máy móc kỹ thuật như "RAG Vector Search...")
   const feedbackAcknowledgment = buildNaturalDoctorAcknowledgment(slots);
   const nextQuestion = isAllCompleted
     ? questionBody
@@ -664,11 +915,14 @@ function buildNaturalDoctorAcknowledgment(slots: ClinicalSlotMatrix): string {
 
   if (list.length === 0) return "";
 
-  return `Tôi đã ghi nhận ${list.join(", ")} vào hồ sơ khám của bạn.\n\nĐể hỗ trợ bác sĩ đánh giá mức độ chính xác hơn, bạn cho tôi hỏi thêm:\n`;
+  return `Tôi đã ghi nhận ${list.join(", ")} vào hồ sơ khám của bạn.\n\nĐể hỗ trợ bác sĩ đánh giá chính xác hơn, bạn cho tôi hỏi thêm:\n`;
 }
 
 function extractPreservedCharacterText(text: string): string {
   const lower = text.toLowerCase();
+  if (lower.includes("thường xuyên") && lower.includes("mồ hôi")) {
+    return "Ra mồ hôi thường xuyên, ẩm ướt";
+  }
   if (lower.includes("dữ dội") && lower.includes("nhói")) {
     return "Đau nhói buốt dữ dội từng cơn";
   }
@@ -684,6 +938,9 @@ function extractPreservedCharacterText(text: string): string {
   if (lower.includes("âm ỉ")) {
     return "Đau âm ỉ liên tục";
   }
+  if (lower.includes("thường xuyên")) {
+    return "Xuất hiện thường xuyên";
+  }
   return text.trim();
 }
 
@@ -694,12 +951,17 @@ function extractDurationAtom(text: string): string {
   if (lower.includes("tháng")) return "Diễn tiến nhiều tháng";
   if (lower.includes("ngày")) return "Khoảng vài ngày gần đây";
   if (lower.includes("sáng nay") || lower.includes("hôm nay")) return "Mới xuất hiện trong ngày";
+  if (lower.includes("thường xuyên") || lower.includes("lâu nay")) return "Kéo dài thường xuyên";
   return "Gần đây";
 }
 
 function extractAssociatedAtom(text: string): string {
   const lower = text.toLowerCase();
   const symptoms: string[] = [];
+  if (lower.includes("mồ hôi")) symptoms.push("Ra mồ hôi tay chân");
+  if (lower.includes("rét run") || lower.includes("ớn lạnh")) symptoms.push("Rét run / ớn lạnh");
+  if (lower.includes("run tay")) symptoms.push("Run tay");
+  if (lower.includes("hồi hộp")) symptoms.push("Hồi hộp tim đập nhanh");
   if (lower.includes("mệt")) symptoms.push("Mệt mỏi");
   if (lower.includes("hụt hơi") || lower.includes("khó thở")) symptoms.push("Hụt hơi / khó thở nhẹ");
   if (lower.includes("buồn nôn")) symptoms.push("Buồn nôn");
