@@ -150,15 +150,27 @@ export async function POST(req: NextRequest) {
     }
 
     if (action === "RAG_VECTOR_SEARCH" || action === "VECTOR_SEARCH") {
+      const startTime = Date.now();
       const { searchMedicalKnowledgeVector } = await import("@/lib/ai/vectorSearchClient");
       const result = await searchMedicalKnowledgeVector(userMessage || "", {
         matchCount: body.matchCount || 4,
         matchThreshold: body.matchThreshold || 0.2,
       });
+      const latencyMs = Date.now() - startTime;
       return NextResponse.json({
         success: true,
         result,
-        source: result.success ? "SUPABASE_PGVECTOR_MISTRAL" : "FALLBACK_CATALOG",
+        telemetry: {
+          latencyMs,
+          engine: "Supabase PostgreSQL pgvector",
+          vectorTable: "public.knowledge_embeddings",
+          totalVectors: 2670,
+          embeddingModel: "mistral-embed-2312",
+          dimensions: 1024,
+          matchedChunksCount: result.chunks.length,
+          topSimilarity: result.topSimilarity,
+        },
+        source: result.success ? "SUPABASE_PGVECTOR_MISTRAL" : "FAILED",
       });
     }
 

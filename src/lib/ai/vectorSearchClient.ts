@@ -156,6 +156,30 @@ export async function searchMedicalKnowledgeVector(
   const matchCount = options.matchCount || 4;
   const matchThreshold = options.matchThreshold !== undefined ? options.matchThreshold : 0.2;
 
+  // Browser Client-side: Proxy to Next.js Serverless Route where secret Mistral keys reside
+  if (typeof window !== "undefined") {
+    try {
+      const res = await fetch("/api/clinical/evaluate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "RAG_VECTOR_SEARCH",
+          userMessage: queryText,
+          matchCount,
+          matchThreshold,
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && data.result) {
+          return data.result as RAGVectorSearchResult;
+        }
+      }
+    } catch (e) {
+      console.warn("[VectorSearch] Client proxy call failed, proceeding to direct call:", e);
+    }
+  }
+
   const supabaseUrl =
     process.env.NEXT_PUBLIC_SUPABASE_URL ||
     process.env.SUPABASE_URL ||
