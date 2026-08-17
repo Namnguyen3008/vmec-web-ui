@@ -271,6 +271,35 @@ export function ClinicalMessageRenderer({
           );
         }
 
+        // Numbered list parsing (e.g. 1. 2. 3.)
+        if (trimmed.includes("\n1.") || /^\d+\.\s+/.test(trimmed)) {
+          const lines = trimmed.split(/\n/);
+          return (
+            <ol key={pIdx} className="space-y-2 pl-1">
+              {lines.map((line, lIdx) => {
+                const numMatch = line.match(/^(\d+)\.\s+(.*)$/);
+                if (!numMatch) {
+                  return line.trim() ? (
+                    <p key={lIdx} className="text-body-sm text-ink-800">
+                      {formatMarkdownInline(line)}
+                    </p>
+                  ) : null;
+                }
+                const num = numMatch[1];
+                const content = numMatch[2];
+                return (
+                  <li key={lIdx} className="flex items-start gap-2.5 text-body-sm text-ink-900">
+                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary-100 text-primary-900 text-2xs font-bold mt-0.5 border border-primary-200">
+                      {num}
+                    </span>
+                    <span className="flex-1">{formatMarkdownInline(content)}</span>
+                  </li>
+                );
+              })}
+            </ol>
+          );
+        }
+
         // Bullet point list parsing
         if (trimmed.includes("\n•") || trimmed.startsWith("•") || trimmed.startsWith("- ")) {
           const lines = trimmed.split(/\n/);

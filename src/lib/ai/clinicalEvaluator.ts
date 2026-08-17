@@ -78,9 +78,21 @@ function isSecurityOrSystemInquiry(text: string): boolean {
     "api key", "apikey", "api_key", "api-key", "token", "secret", "password", "mật khẩu",
     "system prompt", "prompt hệ thống", "cấu hình hệ thống", "mã nguồn", "source code",
     "admin", "root", "database", "cơ sở dữ liệu", "mã khóa", "hướng dẫn hệ thống", "cung cấp key",
-    "cung cấp api", "cho xin key", "cho xin api"
+    "cung cấp api", "cho xin key", "cho xin api", "hack", "jailbreak", "bảo mật", "an toàn thông tin",
+    "phi", "pii", "credentials", "config", "endpoint", "quy tắc bảo mật", "chính sách an toàn"
   ];
   return securityPhrases.some((phrase) => lower.includes(phrase));
+}
+
+function isAgentIdentityInquiry(text: string): boolean {
+  const lower = text.toLowerCase().trim();
+  const identityPhrases = [
+    "bạn là ai", "bạn tên gì", "tên của bạn", "ai tạo ra bạn", "giới thiệu về bạn",
+    "giới thiệu bản thân", "chức năng của bạn", "bạn có thể làm gì", "bạn làm được gì",
+    "năng lực của bạn", "vai trò của bạn", "hướng dẫn sử dụng", "bạn là gì", "mục đích của bạn",
+    "ai phát triển bạn", "thông tin về bạn"
+  ];
+  return identityPhrases.some((phrase) => lower.includes(phrase));
 }
 
 function isOffTopicNonMedical(text: string, currentSlots: ClinicalSlotMatrix): boolean {
@@ -93,7 +105,7 @@ function isOffTopicNonMedical(text: string, currentSlots: ClinicalSlotMatrix): b
   const offTopicKeywords = [
     "thời tiết", "bài thơ", "kể chuyện", "chuyện cười", "viết code", "lập trình",
     "python", "javascript", "bitcoin", "chứng khoán", "ca sĩ", "bài hát", "phim",
-    "bóng đá", "thời sự", "tin tức", "bao nhiêu tuổi", "ai tạo ra bạn", "bạn là ai"
+    "bóng đá", "thời sự", "tin tức", "bao nhiêu tuổi"
   ];
   return offTopicKeywords.some((kw) => lower.includes(kw));
 }
@@ -545,7 +557,7 @@ export function evaluateClinicalMessage(
   const existingFacts: AtomicClinicalFact[] = [...(currentContext.atomicFacts || [])];
   const turnCount = currentContext.turnCount + 1;
 
-  // 0. XỬ LÝ YÊU CẦU BẢO MẬT & API KEY (Security Guard)
+  // 0. XỬ LÝ YÊU CẦU BẢO MẬT & API KEY (Security & Data Governance Guard)
   if (isSecurityOrSystemInquiry(text)) {
     return {
       updatedSlots: slots,
@@ -554,8 +566,94 @@ export function evaluateClinicalMessage(
       isAllCompleted: false,
       isEmergency: false,
       nextQuestion:
-        "Tôi là **AI Agent Trợ Lý Đặt Lịch Khám & Điều Hướng Chuyên Khoa Thông Minh** của Hệ thống Y tế VMEC. Theo chính sách an toàn thông tin và quy chuẩn bảo mật y tế của Bệnh viện, tôi không cung cấp API key, mật khẩu, database credentials hoặc thông tin cấu hình hệ thống.\n\nTôi luôn sẵn sàng lắng nghe và hỗ trợ bạn phân tích triệu chứng sức khỏe, gợi ý chuyên khoa phù hợp và hỗ trợ đặt lịch khám. Nếu bạn đang gặp vấn đề gì về sức khỏe, hãy chia sẻ triệu chứng để tôi hỗ trợ nhé!",
-      suggestedChips: [],
+        "Tôi là **AI Agent Trợ Lý Đặt Lịch Khám & Điều Hướng Chuyên Khoa Thông Minh (VMEC)**, trực thuộc Hệ thống Y tế Đa khoa Quốc tế VMEC.\n\n" +
+        "🔒 **THÔNG CÁO BẢO MẬT & QUẢN TRỊ AN TOÀN DỮ LIỆU Y TẾ:**\n" +
+        "Hệ thống AI Agent được thiết lập tuân thủ nghiêm ngặt **Tiêu chuẩn An toàn Dữ liệu Y tế Quốc tế (ISO 27799 / HIPAA)** và **Khung Quản trị Ứng dụng Trí tuệ Nhân tạo trong Y tế của Bộ Y Tế Việt Nam**. Để đảm bảo an toàn tuyệt đối cho hồ sơ sức khỏe người bệnh (PHI/PII) và tính toàn vẹn của hạ tầng công nghệ bệnh viện:\n" +
+        "• **Bảo vệ tài nguyên hệ thống**: Toàn bộ tham số cấu hình máy chủ, System Prompts, API Keys, Database Credentials và mã nguồn nội bộ đều được mã hóa đa tầng và thiết lập cơ chế cô lập nghiêm ngặt.\n" +
+        "• **Giới hạn quyền hạn (Least Privilege)**: AI Agent vận hành trong môi trường Sandbox chuyên dụng, tuyệt đối không truy xuất, lưu trữ trái phép hoặc cung cấp bất kỳ thông tin hạ tầng/khoá kỹ thuật nào.\n\n" +
+        "🏥 **PHẠM VI NHIỆM VỤ & QUY TRÌNH HỖ TRỢ NGƯỜI BỆNH:**\n" +
+        "AI Agent được ủy quyền hỗ trợ người bệnh theo quy trình chuẩn hóa:\n" +
+        "1. **Lắng nghe & Khai thác triệu chứng**: Tiếp nhận mô tả bệnh lý tự nhiên và làm rõ 4 thông tin cốt lõi (Vị trí/Triệu chứng chính, Tính chất, Thời gian, Dấu hiệu kèm theo).\n" +
+        "2. **Điều hướng Chuyên khoa Chuẩn xác**: Đối soát cơ sở dữ liệu phác đồ Bộ Y Tế và năng lực lâm sàng của từng chuyên khoa tại Bệnh viện VMEC.\n" +
+        "3. **Tra cứu & Giữ chỗ Khung giờ khám**: Kiểm tra lịch trực thực tế của Bác sĩ chuyên khoa và hỗ trợ giữ chỗ tạm thời (Human-In-The-Loop — có Lễ tân thẩm duyệt).\n" +
+        "4. **Sàng lọc & Cảnh báo Cấp cứu 115**: Tự động nhận diện các dấu hiệu nguy hiểm (nhồi máu cơ tim, đột quỵ, khó thở cấp) để hướng dẫn cấp cứu ngay lập tức.\n\n" +
+        "⚠️ *Lưu ý: AI Agent đóng vai trò hỗ trợ tiếp đón, phân loại và điều hướng chuyên khoa; không đưa ra kết luận chẩn đoán bệnh học hoặc phác đồ điều trị thay thế Bác sĩ lâm sàng.*\n\n" +
+        "Nếu bạn hoặc người thân đang gặp phải triệu chứng khó chịu hoặc cần hỗ trợ đặt lịch khám tại Bệnh viện VMEC, xin vui lòng chia sẻ thông tin để tôi được phục vụ bạn chu đáo nhất!",
+      suggestedChips: [
+        {
+          id: "sec_1",
+          display: "Đau tức ngực trái khi gắng sức",
+          fullText: "Tôi bị đau tức ngực trái khi leo cầu thang và hồi hộp",
+          clinicalCategory: "CARDIAC",
+        },
+        {
+          id: "sec_2",
+          display: "Đau đầu nhói buốt dữ dội",
+          fullText: "Tôi bị đau đầu nhói buốt dữ dội từng cơn",
+          clinicalCategory: "NEURO",
+        },
+        {
+          id: "sec_3",
+          display: "Đau âm ỉ vùng thượng vị, ợ chua",
+          fullText: "Tôi bị đau âm ỉ vùng thượng vị sau khi ăn kèm ợ chua",
+          clinicalCategory: "GASTRO",
+        },
+        {
+          id: "sec_4",
+          display: "Đau nhức khớp gối, khó đi lại",
+          fullText: "Tôi bị đau nhức khớp gối nhiều ngày nay đi lại khó khăn",
+          clinicalCategory: "CO_XUONG_KHOP",
+        },
+      ],
+      activeTargetSlot: "chiefComplaint",
+    };
+  }
+
+  // 0.05 XỬ LÝ YÊU CẦU ĐỊNH DANH & NĂNG LỰC HỆ THỐNG (Identity & Capabilities Guard)
+  if (isAgentIdentityInquiry(text)) {
+    return {
+      updatedSlots: slots,
+      atomicFacts: existingFacts,
+      progressPercentage: slots.chiefComplaint.status === "COMPLETED" ? 50 : 0,
+      isAllCompleted: false,
+      isEmergency: false,
+      nextQuestion:
+        "Chào bạn! Tôi là **AI Agent Trợ Lý Đặt Lịch Khám & Điều Hướng Chuyên Khoa Thông Minh (VMEC)** — Giải pháp Trí tuệ Nhân tạo thông minh hỗ trợ tiếp đón và điều hướng y tế ban đầu của Hệ thống Y tế Đa khoa Quốc tế VMEC.\n\n" +
+        "🩺 **VAI TRÒ & NĂNG LỰC CỐT LÕI CỦA TÔI:**\n" +
+        "Hệ thống được phát triển nhằm giải quyết triệt để tình trạng người bệnh phân vân không biết khám chuyên khoa nào, đặt nhầm khoa hoặc tốn nhiều thời gian chờ đợi qua tổng đài, thông qua 4 năng lực chính:\n" +
+        "• 📋 **Khai thác 4 Thông tin Cốt lõi**: Lắng nghe và chủ động làm rõ *Vị trí/Triệu chứng chính*, *Tính chất & Cường độ*, *Thời gian diễn tiến* và *Dấu hiệu kèm theo*.\n" +
+        "• 🎯 **Định hướng Chuyên khoa Đích**: Phân tích triệu chứng và đối soát kho dữ liệu phác đồ Bộ Y Tế để đề xuất đúng chuyên khoa và Bác sĩ chuyên môn cao phụ trách.\n" +
+        "• 📅 **Tra cứu & Giữ chỗ Lịch khám Real-time**: Kết nối hệ thống lịch trực bác sĩ thực tế, hỗ trợ giữ chỗ khung giờ khám thuận tiện và gửi Quầy Lễ tân phê duyệt (HITL).\n" +
+        "• 🚨 **Sàng lọc Dấu hiệu Cấp cứu 115**: Phát hiện tức thì các biểu hiện khẩn cấp đe dọa tính mạng để hướng dẫn xử trí cấp cứu kịp thời.\n\n" +
+        "🌿 **CAM KẾT DỊCH VỤ & BẢO MẬT:**\n" +
+        "Mọi dữ liệu trao đổi của bạn được bảo mật tuyệt đối theo tiêu chuẩn an toàn thông tin y tế. Hãy chia sẻ bất kỳ triệu chứng hay nhu cầu khám bệnh nào bạn đang gặp phải, tôi luôn sẵn sàng hỗ trợ bạn ngay bây giờ!",
+      suggestedChips: [
+        {
+          id: "id_1",
+          display: "Đau tức ngực trái khi gắng sức",
+          fullText: "Tôi bị đau tức ngực trái khi leo cầu thang và hồi hộp",
+          clinicalCategory: "CARDIAC",
+        },
+        {
+          id: "id_2",
+          display: "Đau đầu nhói buốt dữ dội",
+          fullText: "Tôi bị đau đầu nhói buốt dữ dội từng cơn",
+          clinicalCategory: "NEURO",
+        },
+        {
+          id: "id_3",
+          display: "Đau âm ỉ vùng thượng vị, ợ chua",
+          fullText: "Tôi bị đau âm ỉ vùng thượng vị sau khi ăn kèm ợ chua",
+          clinicalCategory: "GASTRO",
+        },
+        {
+          id: "id_4",
+          display: "Đau nhức khớp gối, khó đi lại",
+          fullText: "Tôi bị đau nhức khớp gối nhiều ngày nay đi lại khó khăn",
+          clinicalCategory: "CO_XUONG_KHOP",
+        },
+      ],
+      activeTargetSlot: "chiefComplaint",
     };
   }
 
@@ -568,8 +666,36 @@ export function evaluateClinicalMessage(
       isAllCompleted: false,
       isEmergency: false,
       nextQuestion:
-        "Tôi là **AI Agent Điều Hướng Chuyên Khoa & Đặt Lịch Khám**, chuyên tiếp nhận triệu chứng, gợi ý chuyên khoa khám bệnh và hỗ trợ đặt lịch tại Hệ thống Y tế VMEC. Tôi chỉ có thể hỗ trợ các thông tin liên quan đến y tế và sức khỏe của bạn.\n\nNếu bạn hoặc người thân đang cảm thấy khó chịu hoặc cần khám bệnh, hãy chia sẻ triệu chứng cụ thể để tôi hỗ trợ nhé!",
-      suggestedChips: [],
+        "Tôi là **AI Agent Trợ Lý Đặt Lịch Khám & Điều Hướng Chuyên Khoa Thông Minh** của Hệ thống Y tế Đa khoa Quốc tế VMEC.\n\n" +
+        "Tôi được đào tạo chuyên biệt để tiếp nhận triệu chứng sức khỏe, tư vấn chuyên khoa khám bệnh và hỗ trợ đặt lịch khám theo tiêu chuẩn y tế. Do đó, tôi không thể phản hồi các câu hỏi nằm ngoài phạm vi y khoa và chăm sóc sức khỏe (như giải trí, tin tức xã hội, tài chính, công nghệ chung,...).\n\n" +
+        "Nếu bạn hoặc người thân đang có triệu chứng khó chịu trong người hoặc cần hỗ trợ đặt lịch khám tại Bệnh viện VMEC, xin vui lòng chia sẻ thông tin để tôi hỗ trợ bạn ngay nhé!",
+      suggestedChips: [
+        {
+          id: "off_1",
+          display: "Đau tức ngực trái khi gắng sức",
+          fullText: "Tôi bị đau tức ngực trái khi leo cầu thang và hồi hộp",
+          clinicalCategory: "CARDIAC",
+        },
+        {
+          id: "off_2",
+          display: "Đau đầu nhói buốt dữ dội",
+          fullText: "Tôi bị đau đầu nhói buốt dữ dội từng cơn",
+          clinicalCategory: "NEURO",
+        },
+        {
+          id: "off_3",
+          display: "Đau âm ỉ vùng thượng vị, ợ chua",
+          fullText: "Tôi bị đau âm ỉ vùng thượng vị sau khi ăn kèm ợ chua",
+          clinicalCategory: "GASTRO",
+        },
+        {
+          id: "off_4",
+          display: "Đau nhức khớp gối, khó đi lại",
+          fullText: "Tôi bị đau nhức khớp gối nhiều ngày nay đi lại khó khăn",
+          clinicalCategory: "CO_XUONG_KHOP",
+        },
+      ],
+      activeTargetSlot: "chiefComplaint",
     };
   }
 
@@ -726,6 +852,11 @@ export async function evaluateClinicalMessageAsync(
 
   // 0. Security Guard
   if (isSecurityOrSystemInquiry(text)) {
+    return evaluateClinicalMessage(userText, currentContext);
+  }
+
+  // 0.05 Identity Guard
+  if (isAgentIdentityInquiry(text)) {
     return evaluateClinicalMessage(userText, currentContext);
   }
 
