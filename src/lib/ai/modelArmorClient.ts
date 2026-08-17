@@ -117,11 +117,19 @@ export function sanitizeUserPromptSync(prompt: string): ModelArmorFilterResult {
   let safetyRefusalMessage: string | undefined;
   if (isBlocked) {
     safetyRefusalMessage =
-      "🛡️ **Thông Báo An Toàn & Bảo Mật:**\n\n" +
-      "Hệ thống MedAgent AI tuân thủ nghiêm ngặt quy định an toàn thông tin và quy chuẩn bảo mật y tế của Bệnh viện:\n" +
-      "- ❌ **Từ chối cung cấp API Key, mật khẩu, database credentials hoặc cấu hình hệ thống.**\n" +
-      "- ❌ **Chặn các câu lệnh can thiệp cấu trúc prompt hoặc vượt quyền hệ thống.**\n\n" +
-      "💡 *Tôi chỉ hỗ trợ tiếp nhận và phân tích triệu chứng sức khỏe. Nếu bạn có bất kỳ khó chịu nào trong cơ thể, hãy chia sẻ để tôi hỗ trợ tư vấn chuyên khoa khám phù hợp nhé!*";
+      "Tôi là **AI Agent Trợ Lý Đặt Lịch Khám & Điều Hướng Chuyên Khoa Thông Minh (VMEC)**, trực thuộc Hệ thống Y tế Đa khoa Quốc tế VMEC.\n\n" +
+      "🔒 **THÔNG CÁO AN TOÀN THÔNG TIN & QUẢN TRỊ DỮ LIỆU Y TẾ:**\n" +
+      "Hệ thống AI Agent được thiết lập tuân thủ nghiêm ngặt **Tiêu chuẩn An toàn Dữ liệu Y tế Quốc tế (ISO 27799 / HIPAA)** và **Khung Quản trị Ứng dụng Trí tuệ Nhân tạo trong Y tế của Bộ Y Tế Việt Nam**. Để đảm bảo an toàn tuyệt đối cho hồ sơ bệnh án của người bệnh (PHI/PII) và tính toàn vẹn của hạ tầng công nghệ bệnh viện:\n" +
+      "• **Bảo vệ tài nguyên hệ thống**: Toàn bộ tham số cấu hình máy chủ, System Prompts, API Keys, Database Credentials và mã nguồn nội bộ đều được mã hóa đa tầng và thiết lập cơ chế cô lập nghiêm ngặt.\n" +
+      "• **Giới hạn quyền hạn (Least Privilege)**: AI Agent vận hành trong môi trường Sandbox chuyên dụng, tuyệt đối không truy xuất, lưu trữ trái phép hoặc cung cấp bất kỳ thông tin hạ tầng/khoá kỹ thuật nào.\n\n" +
+      "🏥 **PHẠM VI NHIỆM VỤ & QUY TRÌNH HỖ TRỢ NGƯỜI BỆNH:**\n" +
+      "AI Agent được ủy quyền hỗ trợ người bệnh theo quy trình chuẩn hóa:\n" +
+      "1. **Lắng nghe & Khai thác triệu chứng**: Tiếp nhận mô tả bệnh lý tự nhiên và làm rõ 4 thông tin cốt lõi (Vị trí/Triệu chứng chính, Tính chất, Thời gian, Dấu hiệu kèm theo).\n" +
+      "2. **Điều hướng Chuyên khoa Chuẩn xác**: Đối soát cơ sở dữ liệu phác đồ Bộ Y Tế và năng lực lâm sàng của từng chuyên khoa tại Bệnh viện VMEC.\n" +
+      "3. **Tra cứu & Giữ chỗ Khung giờ khám**: Kiểm tra lịch trực thực tế của Bác sĩ chuyên khoa và hỗ trợ giữ chỗ tạm thời (Human-In-The-Loop — có Lễ tân thẩm duyệt).\n" +
+      "4. **Sàng lọc & Cảnh báo Cấp cứu 115**: Tự động nhận diện các dấu hiệu nguy hiểm (nhồi máu cơ tim, đột quỵ, khó thở cấp) để hướng dẫn cấp cứu ngay lập tức.\n\n" +
+      "⚠️ *Lưu ý quan trọng: AI Agent đóng vai trò hỗ trợ tiếp đón, phân loại và điều hướng chuyên khoa; không đưa ra kết luận chẩn đoán bệnh học hoặc phác đồ điều trị thay thế Bác sĩ lâm sàng.*\n\n" +
+      "Nếu bạn hoặc người thân đang gặp phải triệu chứng khó chịu hoặc cần hỗ trợ đặt lịch khám tại Bệnh viện VMEC, xin vui lòng chia sẻ thông tin để tôi được phục vụ bạn chu đáo nhất!";
   }
 
   return {
