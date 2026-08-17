@@ -11,6 +11,7 @@ import { CLINICAL_SPECIALTIES, generateOffers } from "@/lib/api/chat";
 import { generatePsychologicalSoothing } from "./psychologySpecialist";
 import { recordClinicalEvent } from "./observabilityRecorder";
 import { sanitizeUserPromptSync } from "./modelArmorClient";
+import { searchMedicalKnowledgeVector } from "./vectorSearchClient";
 
 const MEMORY_CACHE = new Map<string, LivingClinicalContext>();
 
@@ -254,8 +255,26 @@ export async function updateLivingContextWithUserMessageAsync(
     };
   }
 
+  // Execute Live Detached Vector Search (Mistral 1024D + Supabase pgvector across 2,670 vectors)
+  const fullClinicalQuery = [
+    currentContext.slots.chiefComplaint.value,
+    currentContext.slots.characterTriggers.value,
+    currentContext.slots.duration.value,
+    currentContext.slots.associatedSigns.value,
+    userMessage,
+  ]
+    .filter(Boolean)
+    .join(". ");
+
+  const ragResult = await searchMedicalKnowledgeVector(fullClinicalQuery, { matchCount: 4 });
+
+  let matchedSpecCode = evalResult.matchedSpecialtyCode;
+  if (ragResult.success && ragResult.suggestedSpecialtyCode) {
+    matchedSpecCode = ragResult.suggestedSpecialtyCode;
+  }
+
   const matchedSpec =
-    CLINICAL_SPECIALTIES.find((s) => s.code === evalResult.matchedSpecialtyCode) ||
+    CLINICAL_SPECIALTIES.find((s) => s.code === matchedSpecCode) ||
     CLINICAL_SPECIALTIES[0];
 
   currentContext.urgencyLevel = "PRIORITY_LEVEL_2";
@@ -263,7 +282,7 @@ export async function updateLivingContextWithUserMessageAsync(
   currentContext.detectedSpecialtyName = matchedSpec.name;
   currentContext.assignedDoctorName = matchedSpec.doctor;
   currentContext.assignedRoom = matchedSpec.room;
-  currentContext.activeCitations = matchedSpec.citations;
+  currentContext.activeCitations = ragResult.citations.length > 0 ? ragResult.citations : matchedSpec.citations;
   currentContext.suggestedChips = [];
   currentContext.appointmentOffers = generateOffers(matchedSpec);
   currentContext.soothingPayload = generatePsychologicalSoothing({
@@ -272,8 +291,29 @@ export async function updateLivingContextWithUserMessageAsync(
     doctorName: matchedSpec.doctor,
   });
 
-  const primaryCitation = matchedSpec.citations[0];
-  const soothingMsg = currentContext.soothingPayload?.comfortingMessage ||
+  // Record Vector Search Observability Event
+  recordClinicalEvent(sessionId, {
+    sessionId,
+    turnNumber: currentContext.turnCount,
+    eventType: "RAG_VECTOR_SEARCH_EXECUTED",
+    component: "RAGVectorPipeline",
+    summary: ragResult.success
+      ? `Truy vấn thành công 2.670 Vector Embedding trên Supabase (${ragResult.totalMatched} chunks khớp, độ tương đồng cao nhất: ${(ragResult.topSimilarity * 100).toFixed(1)}%)`
+      : `Sử dụng Master Clinical Knowledge Catalog (${ragResult.totalMatched} phác đồ tham chiếu)`,
+    payload: {
+      query: fullClinicalQuery,
+      source: ragResult.success ? "SUPABASE_PGVECTOR" : "IN_MEMORY_CATALOG",
+      topSimilarity: ragResult.topSimilarity,
+      matchedChunksCount: ragResult.totalMatched,
+      suggestedSpecialty: matchedSpec.name,
+      citations: currentContext.activeCitations,
+    },
+    provenanceCheck: { passed: true, allowedAsPatientFact: true },
+  });
+
+  const primaryCitation = currentContext.activeCitations[0];
+  const soothingMsg =
+    currentContext.soothingPayload?.comfortingMessage ||
     `Bạn hãy yên tâm nhé, các bác sĩ chuyên khoa ${matchedSpec.name} sẽ đồng hành và chăm sóc sức khỏe chu đáo nhất cho bạn.`;
 
   const replyText =

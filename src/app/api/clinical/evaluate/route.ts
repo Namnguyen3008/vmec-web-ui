@@ -149,6 +149,19 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    if (action === "RAG_VECTOR_SEARCH" || action === "VECTOR_SEARCH") {
+      const { searchMedicalKnowledgeVector } = await import("@/lib/ai/vectorSearchClient");
+      const result = await searchMedicalKnowledgeVector(userMessage || "", {
+        matchCount: body.matchCount || 4,
+        matchThreshold: body.matchThreshold || 0.2,
+      });
+      return NextResponse.json({
+        success: true,
+        result,
+        source: result.success ? "SUPABASE_PGVECTOR_MISTRAL" : "FALLBACK_CATALOG",
+      });
+    }
+
     return NextResponse.json({ success: false, error: "Invalid action" }, { status: 400 });
   } catch (error) {
     return NextResponse.json(
