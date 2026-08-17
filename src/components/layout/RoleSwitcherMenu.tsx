@@ -23,7 +23,7 @@ export function RoleSwitcherMenu() {
       profile: {
         id: "demo_user_patient",
         role: "PATIENT",
-        fullName: "Nguyễn Nam (Bệnh nhân)",
+        fullName: "Nguyễn Văn An (Bệnh nhân)",
         phoneNumber: "0901234567",
         avatarUrl: null,
         dateOfBirth: "1990-01-01",

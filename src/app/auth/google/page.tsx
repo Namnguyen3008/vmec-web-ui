@@ -128,7 +128,7 @@ export default function GoogleAuthPage() {
                   <div className="mt-2.5">
                     <button
                       type="button"
-                      onClick={() => setEmailInput("namnguyen3008@gmail.com")}
+                      onClick={() => setEmailInput("nguyenvanan.demo@gmail.com")}
                       className="text-sm font-medium text-[#0b57d0] hover:text-[#0842a0] hover:underline"
                     >
                       Bạn quên địa chỉ email?

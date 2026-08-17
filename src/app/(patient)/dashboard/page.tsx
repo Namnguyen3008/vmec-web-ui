@@ -31,7 +31,7 @@ const quickActions = [
 
 export default function PatientDashboardPage() {
   const session = useCurrentSession();
-  const displayName = session?.fullName || "Nguyễn Nam";
+  const displayName = session?.fullName || "Nguyễn Văn An";
   const [upcomingAppointment, setUpcomingAppointment] = useState<DetailedAppointment | null>(null);
 
   useEffect(() => {

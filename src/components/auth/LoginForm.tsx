@@ -91,7 +91,7 @@ export function LoginForm({
           <button
             type="button"
             disabled={isSubmitting}
-            onClick={() => handleQuickLogin("PATIENT", "namnguyen3008@vmec.vn", "VmecHealthcare@2026!")}
+            onClick={() => handleQuickLogin("PATIENT", "patient.demo@vmec.vn", "VmecHealthcare@2026!")}
             className="flex flex-col items-center justify-center rounded-xl border border-teal-300 bg-surface p-2.5 text-center text-xs font-semibold text-ink-900 transition hover:border-primary-500 hover:bg-primary-50 hover:shadow-xs active:scale-95 disabled:opacity-60"
           >
             {loggingRole === "PATIENT" ? (

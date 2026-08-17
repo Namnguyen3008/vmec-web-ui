@@ -71,7 +71,7 @@ export default function BookingDirectionsPage() {
   const steps = getDynamicSteps(room);
   const patientName =
     ("patientDetail" in (appointment || {}) && (appointment as DetailedAppointment).patientDetail?.fullName) ||
-    String(appointment?.patientSnapshot?.full_name || appointment?.patientSnapshot?.fullName || "Nguyễn Nam");
+    String(appointment?.patientSnapshot?.full_name || appointment?.patientSnapshot?.fullName || "Nguyễn Văn An");
   const medicalCode =
     ("patientDetail" in (appointment || {}) && (appointment as DetailedAppointment).patientDetail?.medicalCode) ||
     appointment?.appointmentCode ||

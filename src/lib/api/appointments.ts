@@ -345,7 +345,7 @@ export async function getCheckoutContext(slotId: string): Promise<CheckoutContex
 
   return {
     patient: {
-      fullName: "Nguyễn Nam",
+      fullName: "Nguyễn Văn An",
       phoneNumber: "0901234567",
       dateOfBirth: "1995-01-01",
       gender: "MALE",
