@@ -5,56 +5,106 @@ import {
   buildJudgeUserPrompt,
   buildInterrogatorUserPrompt,
 } from "@/lib/ai/prompts";
-import type { JudgeEvaluationResult, SlotKey } from "@/lib/ai/types";
+import type { SlotKey } from "@/lib/ai/types";
+
+const GEMINI_MODELS = ["gemini-3.1-flash-lite", "gemini-3.5-flash-lite"];
+let modelIndex = 0;
+let keyIndex = 0;
+
+function getAvailableKeys(): string[] {
+  const envKeys = [
+    process.env.GEMINI_API_KEY,
+    process.env.GEMINI_API_KEY_2,
+    process.env.GEMINI_API_KEY_3,
+    process.env.GEMINI_API_KEY_4,
+    process.env.GEMINI_API_KEY_5,
+    process.env.GEMINI_API_KEY_6,
+    process.env.GEMINI_API_KEY_7,
+  ].filter(Boolean) as string[];
+
+  return envKeys.length > 0 ? envKeys : [];
+}
+
+async function callGeminiWithRotation(
+  systemInstruction: string,
+  userPrompt: string
+): Promise<{ text: string; model: string; keyUsed: number } | null> {
+  const keys = getAvailableKeys();
+  if (keys.length === 0) return null;
+
+  const totalKeys = keys.length;
+  const attempts = Math.min(totalKeys * 2, 6);
+
+  for (let i = 0; i < attempts; i++) {
+    const activeKey = keys[keyIndex % totalKeys];
+    const activeModel = GEMINI_MODELS[modelIndex % GEMINI_MODELS.length];
+
+    // Increment indices for round-robin load balancing
+    keyIndex++;
+    modelIndex++;
+
+    try {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${activeModel}:generateContent?key=${activeKey}`;
+      const response = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          system_instruction: {
+            parts: [{ text: systemInstruction }],
+          },
+          contents: [
+            {
+              parts: [{ text: userPrompt }],
+            },
+          ],
+          generationConfig: {
+            responseMimeType: "application/json",
+            temperature: 0.2,
+          },
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (rawText) {
+          return { text: rawText, model: activeModel, keyUsed: (keyIndex - 1) % totalKeys + 1 };
+        }
+      } else {
+        console.warn(`Gemini call failed with model ${activeModel} on key slot ${(keyIndex - 1) % totalKeys + 1}:`, response.status);
+      }
+    } catch (err) {
+      console.warn(`Gemini network error with model ${activeModel}:`, err);
+    }
+  }
+
+  return null;
+}
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const { action, targetSlot, userMessage, currentSlots, specialtyCode, specialtyName, lastExtractedFact } = body;
 
-    const geminiKey = process.env.GEMINI_API_KEY || process.env.NEXT_PUBLIC_GEMINI_API_KEY;
-
     if (action === "JUDGE") {
       const userPrompt = buildJudgeUserPrompt(targetSlot as SlotKey, userMessage, currentSlots);
+      const llmResult = await callGeminiWithRotation(CLINICAL_JUDGE_SYSTEM_PROMPT, userPrompt);
 
-      if (geminiKey) {
+      if (llmResult) {
         try {
-          const res = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`,
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                system_instruction: {
-                  parts: [{ text: CLINICAL_JUDGE_SYSTEM_PROMPT }],
-                },
-                contents: [
-                  {
-                    parts: [{ text: userPrompt }],
-                  },
-                ],
-                generationConfig: {
-                  responseMimeType: "application/json",
-                  temperature: 0.1,
-                },
-              }),
-            }
-          );
-
-          if (res.ok) {
-            const data = await res.json();
-            const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
-            if (rawText) {
-              const parsed = JSON.parse(rawText);
-              return NextResponse.json({ success: true, result: parsed, source: "GEMINI_API" });
-            }
-          }
-        } catch (err) {
-          console.warn("Gemini API call failed, using deterministic clinical evaluator fallback:", err);
+          const parsed = JSON.parse(llmResult.text);
+          return NextResponse.json({
+            success: true,
+            result: parsed,
+            model: llmResult.model,
+            keyIndex: llmResult.keyUsed,
+            source: "GEMINI_LIVE_API",
+          });
+        } catch (e) {
+          console.warn("Error parsing Judge LLM JSON:", e);
         }
       }
 
-      // High-Accuracy Deterministic Clinical Fallback
       return NextResponse.json({
         success: true,
         fallback: true,
@@ -70,41 +120,22 @@ export async function POST(req: NextRequest) {
         currentSlots,
         lastExtractedFact
       );
+      const llmResult = await callGeminiWithRotation(CLINICAL_INTERROGATOR_SYSTEM_PROMPT, userPrompt);
 
-      if (geminiKey) {
+      if (llmResult) {
         try {
-          const res = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`,
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                system_instruction: {
-                  parts: [{ text: CLINICAL_INTERROGATOR_SYSTEM_PROMPT }],
-                },
-                contents: [
-                  {
-                    parts: [{ text: userPrompt }],
-                  },
-                ],
-                generationConfig: {
-                  responseMimeType: "application/json",
-                  temperature: 0.3,
-                },
-              }),
-            }
-          );
-
-          if (res.ok) {
-            const data = await res.json();
-            const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
-            if (rawText) {
-              const parsed = JSON.parse(rawText);
-              return NextResponse.json({ success: true, result: parsed, source: "GEMINI_API" });
-            }
+          const parsed = JSON.parse(llmResult.text);
+          if (parsed.question && Array.isArray(parsed.chips) && parsed.chips.length >= 2) {
+            return NextResponse.json({
+              success: true,
+              result: parsed,
+              model: llmResult.model,
+              keyIndex: llmResult.keyUsed,
+              source: "GEMINI_LIVE_API",
+            });
           }
-        } catch (err) {
-          console.warn("Gemini API call failed, using deterministic clinical interrogator fallback:", err);
+        } catch (e) {
+          console.warn("Error parsing Interrogator LLM JSON:", e);
         }
       }
 

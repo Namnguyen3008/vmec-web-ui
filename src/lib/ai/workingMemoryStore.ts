@@ -1,11 +1,12 @@
 /**
- * Fast In-Memory Working Memory Scratchpad (<1ms)
+ * Fast In-Memory Working Memory Scratchpad
  * Manages conversation state, active clinical slots, RAG matching,
  * provenance audit events, and psychology soothing cards.
+ * Integrated with 2-Stage Gemini 3.1 & 3.5 Flash Lite Live API Inference.
  */
 
 import type { LivingClinicalContext } from "./types";
-import { createInitialSlots, evaluateClinicalMessage } from "./clinicalEvaluator";
+import { createInitialSlots, evaluateClinicalMessage, evaluateClinicalMessageAsync } from "./clinicalEvaluator";
 import { CLINICAL_SPECIALTIES, generateOffers } from "@/lib/api/chat";
 import { generatePsychologicalSoothing } from "./psychologySpecialist";
 import { recordClinicalEvent } from "./observabilityRecorder";
@@ -43,9 +44,7 @@ export function updateLivingContextWithUserMessage(
 
   // 0. Google Model Armor AI Safety & Gateway Interceptor
   const armorResult = sanitizeUserPromptSync(userMessage);
-
   if (!armorResult.isSafe) {
-    currentContext.suggestedChips = []; // Clear chips on security violations
     recordClinicalEvent(sessionId, {
       sessionId,
       turnNumber: currentContext.turnCount + 1,
@@ -212,6 +211,112 @@ export function updateLivingContextWithUserMessage(
       citations: matchedSpec.citations,
       reasoning: evalResult.dynamicClinicalReasoning,
     },
+  });
+
+  const primaryCitation = matchedSpec.citations[0];
+  const symptomSummary = [
+    currentContext.slots.chiefComplaint.value,
+    currentContext.slots.characterTriggers.value,
+    currentContext.slots.duration.value,
+    currentContext.slots.associatedSigns.value,
+  ]
+    .filter(Boolean)
+    .join(" — ");
+
+  const replyText =
+    `Dựa trên toàn bộ các triệu chứng lâm sàng bạn đã cung cấp (*${symptomSummary}*), tôi đã đối chiếu phác đồ chuyên khoa chuẩn của Bộ Y Tế:\n\n` +
+    `🏥 **CHUYÊN KHOA ĐỀ XUẤT:** **${matchedSpec.name}**\n` +
+    `👨‍⚕️ **BÁC SĨ PHỤ TRÁCH:** **${matchedSpec.doctor}** (${matchedSpec.room})\n` +
+    `💡 **NHẬN ĐỊNH LÂM SÀNG SƠ BỘ:** ${evalResult.dynamicClinicalReasoning || matchedSpec.reasoning}\n` +
+    (primaryCitation ? `📚 **PHÁC ĐỒ THAM CHIẾU:** *${primaryCitation.label} (${primaryCitation.documentId})*\n\n` : `\n`) +
+    `👇 *Mời bạn chọn 1 trong 3 khung giờ khám khả dụng bên dưới để giữ chỗ gửi Lễ tân duyệt nhé:*`;
+
+  MEMORY_CACHE.set(sessionId, currentContext);
+  return { context: currentContext, replyText };
+}
+
+export async function updateLivingContextWithUserMessageAsync(
+  sessionId: string,
+  userMessage: string
+): Promise<{ context: LivingClinicalContext; replyText: string }> {
+  const currentContext = getOrCreateLivingContext(sessionId);
+
+  // 0. Safety Gateway
+  const armorResult = sanitizeUserPromptSync(userMessage);
+  if (!armorResult.isSafe) {
+    return updateLivingContextWithUserMessage(sessionId, userMessage);
+  }
+
+  // 1. Live 2-Stage Gemini API Execution
+  const evalResult = await evaluateClinicalMessageAsync(userMessage, currentContext);
+
+  currentContext.turnCount += 1;
+  currentContext.slots = evalResult.updatedSlots;
+  currentContext.atomicFacts = evalResult.atomicFacts;
+  currentContext.progressPercentage = evalResult.progressPercentage;
+  currentContext.isEmergency = evalResult.isEmergency;
+  currentContext.isCompleted = evalResult.isAllCompleted;
+
+  if (evalResult.judgeResult) {
+    currentContext.lastJudgeResult = evalResult.judgeResult;
+    recordClinicalEvent(sessionId, {
+      sessionId,
+      turnNumber: currentContext.turnCount,
+      eventType: "SLOT_STATE_DELTA",
+      component: "ClinicalJudgeLLM",
+      summary: `Judge LLM Thẩm định [${evalResult.judgeResult.targetSlot}]: ${evalResult.judgeResult.verdict === "SATISFIED" ? "ĐẠT CHUẨN ✅" : "CHƯA ĐẠT ⚠️"} (Độ rõ: ${(evalResult.judgeResult.clarityScore * 100).toFixed(0)}%)`,
+      payload: {
+        targetSlot: evalResult.judgeResult.targetSlot,
+        verdict: evalResult.judgeResult.verdict,
+        clarityScore: evalResult.judgeResult.clarityScore,
+        reasoning: evalResult.judgeResult.reasoning,
+        extractedFact: evalResult.judgeResult.extractedFact,
+      },
+      provenanceCheck: {
+        passed: evalResult.judgeResult.verdict === "SATISFIED",
+        allowedAsPatientFact: true,
+      },
+    });
+  }
+
+  if (evalResult.isEmergency) {
+    return updateLivingContextWithUserMessage(sessionId, userMessage);
+  }
+
+  if (!evalResult.isAllCompleted) {
+    currentContext.detectedSpecialtyCode = undefined;
+    currentContext.detectedSpecialtyName = undefined;
+    currentContext.assignedDoctorName = undefined;
+    currentContext.assignedRoom = undefined;
+    currentContext.activeCitations = [];
+    currentContext.appointmentOffers = [];
+    currentContext.soothingPayload = null;
+    currentContext.suggestedChips = evalResult.suggestedChips;
+    currentContext.currentQuestion = evalResult.nextQuestion;
+
+    MEMORY_CACHE.set(sessionId, currentContext);
+    return {
+      context: currentContext,
+      replyText: evalResult.nextQuestion,
+    };
+  }
+
+  const matchedSpec =
+    CLINICAL_SPECIALTIES.find((s) => s.code === evalResult.matchedSpecialtyCode) ||
+    CLINICAL_SPECIALTIES[0];
+
+  currentContext.urgencyLevel = "PRIORITY_LEVEL_2";
+  currentContext.detectedSpecialtyCode = matchedSpec.code;
+  currentContext.detectedSpecialtyName = matchedSpec.name;
+  currentContext.assignedDoctorName = matchedSpec.doctor;
+  currentContext.assignedRoom = matchedSpec.room;
+  currentContext.activeCitations = matchedSpec.citations;
+  currentContext.suggestedChips = [];
+  currentContext.appointmentOffers = generateOffers(matchedSpec);
+  currentContext.soothingPayload = generatePsychologicalSoothing({
+    specialtyCode: matchedSpec.code,
+    specialtyName: matchedSpec.name,
+    doctorName: matchedSpec.doctor,
   });
 
   const primaryCitation = matchedSpec.citations[0];

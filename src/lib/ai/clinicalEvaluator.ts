@@ -712,6 +712,127 @@ export function evaluateClinicalMessage(
   };
 }
 
+/**
+ * Full Async Clinical Evaluator with 100% Live Gemini 3.1 & 3.5 Flash Lite Generation
+ */
+export async function evaluateClinicalMessageAsync(
+  userText: string,
+  currentContext: LivingClinicalContext
+): Promise<SlotEvaluationResult> {
+  const text = userText.trim().toLowerCase();
+  const slots: ClinicalSlotMatrix = { ...currentContext.slots };
+  const existingFacts: AtomicClinicalFact[] = [...(currentContext.atomicFacts || [])];
+  const turnCount = currentContext.turnCount + 1;
+
+  // 0. Security Guard
+  if (isSecurityOrSystemInquiry(text)) {
+    return evaluateClinicalMessage(userText, currentContext);
+  }
+
+  // 0.1 Off-topic Guard
+  if (isOffTopicNonMedical(text, slots)) {
+    return evaluateClinicalMessage(userText, currentContext);
+  }
+
+  // 1. Pure Greeting
+  if (isPureGreeting(text)) {
+    return evaluateClinicalMessage(userText, currentContext);
+  }
+
+  // 2. Emergency 115
+  if (detectEmergency(text)) {
+    return evaluateClinicalMessage(userText, currentContext);
+  }
+
+  // 3. Active Target Slot
+  const activeSlot: SlotKey = getNextPendingSlot(slots) || "chiefComplaint";
+
+  // 4. Live Judge LLM Execution via Remote Gemini Pool
+  const { callJudgeLLMRemote, callInterrogatorLLMRemote } = await import("./llmClient");
+  let judgeResult = await callJudgeLLMRemote(activeSlot, userText, slots);
+  if (!judgeResult) {
+    judgeResult = evaluateSlotWithJudge(activeSlot, userText, slots);
+  }
+
+  let nextTargetSlot: SlotKey | null = activeSlot;
+
+  if (judgeResult.verdict === "SATISFIED") {
+    const cleanedFact = activeSlot === "chiefComplaint" ? cleanSymptomText(userText) : (judgeResult.extractedFact || userText.trim());
+    slots[activeSlot].status = "COMPLETED";
+    slots[activeSlot].value = cleanedFact;
+    slots[activeSlot].clarityScore = judgeResult.clarityScore;
+
+    existingFacts.push({
+      id: `fact_${Date.now()}_${activeSlot}`,
+      category: activeSlot === "chiefComplaint" ? "CHIEF_COMPLAINT" : activeSlot === "characterTriggers" ? "CHARACTER_TRIGGERS" : activeSlot === "duration" ? "DURATION" : "ASSOCIATED_SIGNS",
+      label: SLOT_METADATA[activeSlot].label,
+      value: cleanedFact,
+      rawSnippet: userText.trim(),
+      provenance: "PATIENT_EXPLICIT",
+      sourceTurn: turnCount,
+    });
+
+    nextTargetSlot = getNextPendingSlot(slots);
+  } else {
+    slots[activeSlot].status = "IN_PROGRESS";
+  }
+
+  // 5. Calculate Progress
+  let completedCount = 0;
+  if (slots.chiefComplaint.status === "COMPLETED") completedCount++;
+  if (slots.characterTriggers.status === "COMPLETED") completedCount++;
+  if (slots.duration.status === "COMPLETED") completedCount++;
+  if (slots.associatedSigns.status === "COMPLETED") completedCount++;
+
+  const isAllCompleted = completedCount >= 4 || nextTargetSlot === null;
+  const progressPercentage = isAllCompleted ? 100 : completedCount * 25;
+
+  // 6. Route Specialty
+  const matchedSpec = routeSpecialtyWithFactWeights(
+    slots.chiefComplaint.value || userText,
+    slots.associatedSigns.value || "",
+    slots.characterTriggers.value || ""
+  );
+
+  const dynamicReasoning = synthesizeDynamicReasoning(matchedSpec, slots, existingFacts);
+
+  // 7. Live Interrogator LLM Execution (100% Dynamic Question + 4 Quick-Chips)
+  let nextQuestion = "";
+  let suggestedChips: ContextualChipOption[] = [];
+
+  if (isAllCompleted) {
+    nextQuestion = `Đã thẩm định hoàn tất 4 thông tin cốt lõi. Đang đối chiếu phác đồ chuyên khoa ${matchedSpec.name}...`;
+    suggestedChips = [];
+  } else if (judgeResult.verdict === "UNSATISFIED") {
+    const ack = buildNaturalDoctorAcknowledgment(slots);
+    const interrogator = await callInterrogatorLLMRemote(activeSlot, matchedSpec.code, matchedSpec.name, slots, userText) ||
+                         generateInterrogatorResponse(activeSlot, matchedSpec.code, userText);
+    nextQuestion = `${ack}${judgeResult.clarificationPrompt || interrogator.question}`;
+    suggestedChips = interrogator.chips;
+  } else {
+    const ack = buildNaturalDoctorAcknowledgment(slots);
+    const interrogator = await callInterrogatorLLMRemote(nextTargetSlot!, matchedSpec.code, matchedSpec.name, slots, userText) ||
+                         generateInterrogatorResponse(nextTargetSlot!, matchedSpec.code, userText);
+    nextQuestion = `${ack}${interrogator.question}`;
+    suggestedChips = interrogator.chips;
+  }
+
+  return {
+    updatedSlots: slots,
+    atomicFacts: existingFacts,
+    progressPercentage,
+    isAllCompleted,
+    isEmergency: false,
+    nextQuestion,
+    suggestedChips,
+    matchedSpecialtyCode: matchedSpec.code,
+    matchedSpecialtyName: matchedSpec.name,
+    dynamicClinicalReasoning: dynamicReasoning,
+    judgeResult,
+    activeTargetSlot: nextTargetSlot || undefined,
+  };
+}
+
 function buildNaturalDoctorAcknowledgment(slots: ClinicalSlotMatrix): string {
   const list: string[] = [];
   if (slots.chiefComplaint.value && slots.chiefComplaint.status === "COMPLETED") {

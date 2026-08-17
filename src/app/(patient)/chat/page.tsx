@@ -21,6 +21,7 @@ import {
 import {
   getOrCreateLivingContext,
   updateLivingContextWithUserMessage,
+  updateLivingContextWithUserMessageAsync,
   forceCompleteLivingContext,
 } from "@/lib/ai/workingMemoryStore";
 import type { LivingClinicalContext, PsychologicalSoothingPayload } from "@/lib/ai/types";
@@ -192,8 +193,8 @@ export default function ChatPage() {
         setSessionId(session.id);
       }
 
-      // Cập nhật Living Context & Thẩm định 4 trường lâm sàng
-      const { context: updatedContext, replyText } = updateLivingContextWithUserMessage(
+      // Cập nhật Living Context & Thẩm định 4 trường lâm sàng (100% Live 2-Stage Gemini API)
+      const { context: updatedContext, replyText } = await updateLivingContextWithUserMessageAsync(
         activeSessionId,
         trimmed
       );

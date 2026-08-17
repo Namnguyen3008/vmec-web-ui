@@ -1,6 +1,7 @@
 /**
  * LLM Client Module for Clinical Judge & Clinical Interrogator
- * Interacts with /api/clinical/evaluate (Gemini API) with built-in high-accuracy fallback.
+ * Calls Next.js Route /api/clinical/evaluate (Rotating 7 Gemini API Keys & Gemini 3.1 / 3.5 Flash Lite)
+ * with robust local fallback.
  */
 
 import type {
@@ -16,6 +17,85 @@ export function getNextPendingSlot(slots: ClinicalSlotMatrix): SlotKey | null {
   if (slots.characterTriggers.status !== "COMPLETED") return "characterTriggers";
   if (slots.duration.status !== "COMPLETED") return "duration";
   if (slots.associatedSigns.status !== "COMPLETED") return "associatedSigns";
+  return null;
+}
+
+export async function callJudgeLLMRemote(
+  targetSlot: SlotKey,
+  userMessage: string,
+  currentSlots: ClinicalSlotMatrix
+): Promise<JudgeEvaluationResult | null> {
+  try {
+    const res = await fetch("/api/clinical/evaluate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "JUDGE",
+        targetSlot,
+        userMessage,
+        currentSlots,
+      }),
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      if (data.success && data.result) {
+        return {
+          targetSlot,
+          verdict: data.result.verdict === "SATISFIED" ? "SATISFIED" : "UNSATISFIED",
+          clarityScore: typeof data.result.clarityScore === "number" ? data.result.clarityScore : 0.9,
+          extractedFact: data.result.extractedFact || userMessage.trim(),
+          reasoning: data.result.reasoning || "Được thẩm định bởi Gemini Live API",
+          clarificationPrompt: data.result.clarificationPrompt,
+        };
+      }
+    }
+  } catch (e) {
+    console.warn("Judge API network call error, using local fallback:", e);
+  }
+  return null;
+}
+
+export async function callInterrogatorLLMRemote(
+  targetSlot: SlotKey,
+  specialtyCode: string,
+  specialtyName: string,
+  currentSlots: ClinicalSlotMatrix,
+  lastExtractedFact?: string
+): Promise<InterrogatorResult | null> {
+  try {
+    const res = await fetch("/api/clinical/evaluate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "INTERROGATE",
+        targetSlot,
+        specialtyCode,
+        specialtyName,
+        currentSlots,
+        lastExtractedFact,
+      }),
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      if (data.success && data.result?.question && Array.isArray(data.result?.chips)) {
+        return {
+          targetSlot,
+          question: data.result.question,
+          chips: data.result.chips.map((c: { id?: string; display?: string; fullText?: string; clinicalCategory?: string }, idx: number) => ({
+            id: c.id || `chip_${targetSlot}_${idx}`,
+            display: c.display || c.fullText?.slice(0, 30) || "Tình huống",
+            fullText: c.fullText || c.display || "",
+            clinicalCategory: c.clinicalCategory || "LLM_GENERATED",
+          })),
+          specialtyCode,
+        };
+      }
+    }
+  } catch (e) {
+    console.warn("Interrogator API network call error, using local fallback:", e);
+  }
   return null;
 }
 
