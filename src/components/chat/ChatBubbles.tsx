@@ -9,6 +9,7 @@ import type { PsychologicalSoothingPayload } from "@/lib/ai/types";
 export interface CitationItem {
   sourceId?: string | null;
   documentId?: string | null;
+  documentCode?: string | null;
   label: string;
   url?: string | null;
   sectionTitle?: string | null;
@@ -97,7 +98,7 @@ export function AgentBubble({
                           )}
                           {cite.documentId && (
                             <p className="text-2xs text-ink-500 font-mono mt-0.5">
-                              Mã bản ghi: {cite.documentId} {cite.sourceId ? `· Batch: ${cite.sourceId}` : ""}
+                              Mã bản ghi: {cite.documentId} {cite.documentCode ? `· Số QĐ: ${cite.documentCode}` : ""} {cite.sourceId ? `· Batch: ${cite.sourceId}` : ""}
                             </p>
                           )}
                         </div>
