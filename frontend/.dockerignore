@@ -1,0 +1,27 @@
+# Secrets — never copy into the Docker image
+.env
+.env.*
+!*.example
+
+# Dependencies / build output
+node_modules/
+.next/
+tsconfig.tsbuildinfo
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Dev/test tooling & design assets (not needed at runtime)
+figma/
+.eslintcache
+
+# Build metadata
+Dockerfile
+.dockerignore
+
+# VCS
+.git/
+.gitignore

@@ -1,0 +1,26 @@
+# Secrets — never copy into the Docker image
+.env
+.env.*
+credentials/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+
+# Dev/test tooling (not needed at runtime)
+tests/
+*.log
+
+# Build metadata (avoid copying the Dockerfile itself into the image)
+Dockerfile
+.dockerignore
+docker-compose.yml
+
+# VCS
+.git/
+.gitignore

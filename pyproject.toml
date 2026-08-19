@@ -1,0 +1,44 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "p-208-vmec-healthcare"
+version = "1.0.0"
+description = "VMEC Healthcare AI Agent Platform — Multi-Turn Triage, Supabase pgvector RAG, Cosmos DB"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.34.0",
+    "pydantic>=2.10.0",
+    "pydantic-settings>=2.7.0",
+    "python-dotenv>=1.0.0",
+    "httpx>=0.28.0",
+    "supabase>=2.15.0",
+    "azure-cosmos>=4.9.0",
+    "google-genai>=0.1.1",
+    "mistralai>=1.5.0",
+    "tiktoken>=0.9.0",
+    "PyJWT>=2.9.0",
+    "qrcode[pil]>=8.2",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.24.0",
+    "ruff>=0.8.0",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+addopts = "-v --tb=short"
+testpaths = ["backend/tests"]
+asyncio_mode = "auto"

@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "hooks": {
+    "beforeSubmitPrompt": [
+      {
+        "command": "scripts/_pyrun.cmd scripts/log_hook.py --tool=cursor"
+      }
+    ],
+    "stop": [
+      {
+        "command": "scripts/_pyrun.cmd scripts/log_hook.py --tool=cursor"
+      }
+    ]
+  }
+}
