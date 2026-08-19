@@ -20,6 +20,7 @@ from src.agents.state import (
     SlotItem,
     create_initial_slots,
 )
+from src.config import get_settings
 from src.persistence.cosmos_client import CosmosClientManager, get_cosmos_manager
 from src.services.grounding import Citation
 from src.services.psychology import PsychologicalSoothingPayload
@@ -63,6 +64,8 @@ class ClinicalAgentExecutor:
                 turn_count=0,
                 progress_percent=0,
                 urgency="ROUTINE",
+                active_workflow="",
+                intent="",
                 last_updated=datetime.now(timezone.utc).isoformat(),
             )
 
@@ -90,18 +93,11 @@ class ClinicalAgentExecutor:
         """
         Executes one full conversational turn for the patient.
         """
+        settings = get_settings()
+
         # 1. Load or initialize living session context from Cosmos DB
         session = await self._load_or_create_session(session_id, user_id)
         session.turn_count += 1
-
-        # Record user message in history
-        session.chatHistory.append(
-            ChatMessage(
-                role="user",
-                content=user_message,
-                timestamp=datetime.now(timezone.utc).isoformat(),
-            )
-        )
 
         # 2. Build AgentState for LangGraph
         initial_state = {
@@ -113,6 +109,11 @@ class ClinicalAgentExecutor:
             "progress_percent": session.progress_percent,
             "turn_count": session.turn_count,
             "urgency": session.urgency,
+            "active_workflow": session.active_workflow,
+            "intent": session.intent or "MEDICAL",
+            "rag_enabled": getattr(settings, "rag_enabled", True),
+            "mcp_enabled": getattr(settings, "mcp_enabled", False),
+            "audit_events": [],
             "halt": False,
             "is_emergency": False,
             "is_blocked": False,
@@ -120,6 +121,16 @@ class ClinicalAgentExecutor:
 
         # 3. Invoke LangGraph State Machine
         final_state = await clinical_graph.ainvoke(initial_state)
+
+        # Record sanitized user message in history
+        saved_user_msg = final_state.get("sanitized_message") or user_message
+        session.chatHistory.append(
+            ChatMessage(
+                role="user",
+                content=saved_user_msg,
+                timestamp=datetime.now(timezone.utc).isoformat(),
+            )
+        )
 
         # 4. Commit updated state back into SessionDocument
         if "slots" in final_state:
@@ -130,6 +141,10 @@ class ClinicalAgentExecutor:
             session.progress_percent = final_state["progress_percent"]
         if "urgency" in final_state:
             session.urgency = final_state["urgency"]
+        if "active_workflow" in final_state:
+            session.active_workflow = final_state["active_workflow"]
+        if "intent" in final_state:
+            session.intent = final_state["intent"]
         if "citations" in final_state:
             session.citations = [Citation(**c) for c in final_state["citations"]]
         if "quick_chips" in final_state:
@@ -185,6 +200,8 @@ class ClinicalAgentExecutor:
             "citations": [c.model_dump() for c in session.citations],
             "is_emergency": final_state.get("is_emergency", False),
             "is_blocked": final_state.get("is_blocked", False),
+            "active_workflow": session.active_workflow,
+            "intent": session.intent,
         }
 
 
