@@ -1,217 +1,255 @@
-# VMEC Healthcare - He Thong Tro Ly Y Te AI Dieu Huong Chuyen Khoa & Dat Lich Kham
+# VMEC Healthcare - Nền Tảng Trợ Lý Y Tế AI Điều Hướng Chuyên Khoa & Đặt Lịch Khám
 
-VMEC Healthcare (Team P-208) la nen tang Tro ly Y te AI toan dien phuc vu tiep nhan trieu chung benh nhan, lam ro tinh trang da luot (Multi-turn Clinical Triage), dinh tuyen chinh xac 18 chuyen khoa lam sang theo quy chuan Bo Y Te, tra cuu bac si phu hop va ho tro giu cho dat lich kham tu dong voi co che kiem soat Human-in-the-loop (Le tan phe duyet).
+VMEC Healthcare (Team P-208) là nền tảng Trợ lý Y tế AI toàn diện phục vụ tiếp nhận triệu chứng, làm rõ tình trạng lâm sàng đa lượt (Multi-turn Clinical Triage), định tuyến chính xác 18 chuyên khoa lâm sàng theo quy chuẩn Bộ Y Tế, tra cứu bác sĩ phù hợp và hỗ trợ giữ chỗ đặt lịch khám tự động với cơ chế kiểm soát Human-in-the-loop (Lễ tân phê duyệt).
 
 ---
 
-## 1. Tong Quan Kien Truc He Thong
+## 1. Tổng Quan Kiến Trúc & 5 Trụ Cột Công Nghệ
 
-He thong duoc thiet ke dua tren 5 tru cot cong nghe hien dai, dam bao tinh san sang cao, do tre thap, an toan bao mat thong tin y te va trinh bay nguon goc du lieu minh bach:
+Hệ thống được thiết kế dựa trên 5 trụ cột công nghệ hiện đại, đảm bảo tính sẵn sàng cao, độ trễ thấp, an toàn bảo mật thông tin y tế và minh bạch nguồn gốc tri thức:
 
-### 1.1. Frontend Web Application (Next.js 16)
-- Xay dung tren Next.js 16 voi kien truc App Router, Turbopack engine va Tailwind CSS.
-- Tich hop he thong trich dan thuan co so du lieu (Pure Database-Driven Citations), ket noi truc tiep vao bai viet lam sang chinh thong (HTTP 200 OK) va so Hieu Quyet dinh Bo Y Te.
-- Cung cap bo chuyen doi vai tro trai nghiem tuc thi (Role Switcher) gom 3 phan he:
-  + Benh nhan (Patient Portal): Hoi thoai AI, nhan dinh tuyen chuyen khoa, giu cho lich kham, xem chi dan duong va quan ly ma QR/So benh an.
-  + Bac si (Doctor Clinical Panel): Xem hang doi benh nhan thoi gian thuc, tong hop benh an dien tu (EMR) do AI khoi tao va ghi chu ket luan kham.
-  + Le tan / Dieu phoi vien (Receptionist Approvals): Phe duyet hoac dieu chinh cac yeu cau giu cho tu dong, giam tai un tac phong kham.
+### 1.1. Giao Diện Người Dùng Web (Next.js 16)
+- Xây dựng trên nền tảng Next.js 16 với kiến trúc App Router, Turbopack engine và Tailwind CSS.
+- Tích hợp hệ thống trích dẫn thuần cơ sở dữ liệu (Pure Database-Driven Citations), kết nối trực tiếp vào các bài viết lâm sàng chính thống hoạt động thực tế (HTTP 200 OK) và số hiệu Quyết định Bộ Y Tế.
+- Cung cấp bộ chuyển đổi vai trò trải nghiệm tức thì (Role Switcher) gồm 3 phân hệ:
+  + Bệnh nhân (Patient Portal): Hội thoại AI, nhận định tuyến chuyên khoa, giữ chỗ lịch khám, xem chỉ dẫn đường và quản lý mã QR / Sổ bệnh án điện tử.
+  + Bác sĩ (Doctor Clinical Panel): Xem hàng đợi bệnh nhân thời gian thực, tổng hợp bệnh án điện tử (EMR) do AI khởi tạo và ghi chú kết luận khám.
+  + Lễ tân / Điều phối viên (Receptionist Approvals): Phê duyệt hoặc điều chỉnh các yêu cầu giữ chỗ tự động, giảm tải ùn tắc phòng khám.
 
 ### 1.2. Backend Dedicated API (FastAPI)
-- Phat trien tren Python 3.12 voi framework FastAPI, Uvicorn ASGI server va Pydantic v2 Settings.
-- Kien truc Stateless Microservices phuc vu tai cong 8000, ho tro day du OpenAPI/Swagger docs, CORS da nguon va co che xu ly loi tap trung.
+- Phát triển trên Python 3.12 với framework FastAPI, Uvicorn ASGI server và Pydantic v2 Settings.
+- Kiến trúc Stateless Microservices phục vụ tại cổng 8000, hỗ trợ đầy đủ OpenAPI / Swagger docs, CORS đa nguồn và cơ chế xử lý lỗi tập trung.
 
 ### 1.3. AI Clinical Triage Engine (28-Node Graph)
-- He thong dieu phoi hoi thoai lam sang 28-node gom 3 subgraphs doc lap:
-  + TriageGraph: Thu thap 4 slot lam sang (Trieu chung chinh, Tinh chat/Khoi phat, Thoi gian dien tien, Dau hieu canh bao).
-  + RagGraph: Truy van tuong dong tri thuc y te 1024-chieu qua pgvector.
-  + CatalogGraph: Tra cuu bac si va lich trong theo thoi gian thuc.
-- Tich hop bo loc an toan Model Armor (phat hien Prompt Injection, lo lot PII/Credentials) va bo chan cap cuu Emergency Guard 115.
+- Hệ thống điều phối hội thoại lâm sàng 28-node gồm 3 subgraphs độc lập:
+  + TriageGraph: Thu thập 4 slot lâm sàng (Triệu chứng chính, Tính chất / Khởi phát, Thời gian diễn tiến, Dấu hiệu cảnh báo).
+  + RagGraph: Truy vấn tương đồng tri thức y tế 1024-chiều qua pgvector.
+  + CatalogGraph: Tra cứu bác sĩ và lịch trống theo thời gian thực.
+- Tích hợp bộ lọc an toàn Model Armor (phát hiện Prompt Injection, rò rỉ PII / Credentials) và bộ chặn cấp cứu chủ động Emergency Guard 115.
 
-### 1.4. Co So Du Lieu Tri Thuc & Vector RAG (Supabase pgvector)
-- Su dung Supabase Cloud PostgreSQL tich hop extension pgvector.
-- Luu tru 3.650 vector tri thuc y te 1024-chieu duoc chuan hoa tu phac do Bo Y Te qua Mistral Embeddings.
-- Ham luu tru RPC `public.match_knowledge_chunks` thuc hien cosine similarity search va tu dong lam giau metadata trinh bay bai viet thuc te.
+### 1.4. Cơ Sở Dữ Liệu Tri Thức & Vector RAG (Supabase pgvector)
+- Sử dụng Supabase Cloud PostgreSQL tích hợp extension pgvector.
+- Lưu trữ 3.650 vector tri thức y tế 1024-chiều được chuẩn hóa từ phác đồ Bộ Y Tế qua Mistral Embeddings.
+- Hàm lưu trữ RPC `public.match_knowledge_chunks` thực hiện cosine similarity search và tự động làm giàu metadata bài viết thực tế.
 
 ### 1.5. Atomic State & Slot Holding Engine (Azure Cosmos DB Free Tier)
-- Su dung Azure Cosmos DB (1.000 RU/s + 25GB Storage mien phi vinh vien).
-- Ho tro tao khoa giu cho lich kham nguyen tu (Atomic Slot Hold) voi do tre duoi 5ms va co che tu huy sau 15 phut (TTL = 900s).
-- Luu tru phien hoi thoai nguoi dung voi co che tu dong het han sau 24 gio (TTL = 86400s).
+- Sử dụng Azure Cosmos DB (1.000 RU/s + 25GB Storage miễn phí trọn đời).
+- Hỗ trợ tạo khóa giữ chỗ lịch khám nguyên tử (Atomic Slot Hold) với độ trễ dưới 5ms và cơ chế tự hủy sau 15 phút (TTL = 900s).
+- Lưu trữ phiên hội thoại người dùng với cơ chế tự động hết hạn sau 24 giờ (TTL = 86400s).
 
 ---
 
-## 2. So Do Kien Truc & Luong Du Lieu
+## 2. Sơ Đồ Kiến Trúc Tổng Thể & Luồng Dữ Liệu
 
-### 2.1. So Do Tong The (System Architecture)
+### 2.1. Sơ Đồ Phân Tầng Kiến Trúc Hệ Thống (System Architecture Diagram)
 
+```mermaid
+graph TB
+    subgraph ClientLayer["LỚP GIAO DIỆN NGƯỜI DÙNG (NEXT.JS 16)"]
+        PatientPortal["Bệnh Nhân (Patient Portal)<br/>• AI Chat & Triage đa lượt<br/>• Đặt lịch khám & Chỉ dẫn đường<br/>• Quản lý QR Code & Hồ sơ"]
+        DoctorPanel["Bác Sĩ (Doctor Clinical Panel)<br/>• Danh sách hàng đợi khám<br/>• Trợ lý AI tóm tắt EMR<br/>• Ghi chú kết luận lâm sàng"]
+        StaffPanel["Lễ Tân (Receptionist Approvals)<br/>• Phê duyệt yêu cầu đặt lịch<br/>• Điều phối lịch khám thời gian thực<br/>• Quản lý danh mục chuyên khoa"]
+    end
+
+    subgraph APILayer["LỚP DỊCH VỤ BACKEND (FASTAPI - PORT 8000)"]
+        ChatAPI["/api/v1/chat/message<br/>Hội thoại & Triage AI"]
+        TriageAPI["/api/v1/triage/evaluate<br/>Đánh giá & Định tuyến chuyên khoa"]
+        VectorAPI["/api/v1/vector/search<br/>Truy vấn tương đồng RAG"]
+        BookingAPI["/api/v1/bookings/hold<br/>Khóa giữ chỗ & Đặt lịch"]
+    end
+
+    subgraph EngineLayer["28-NODE CLINICAL TRIAGE ENGINE (LANGGRAPH)"]
+        ModelArmor["Model Armor<br/>• Chặn Prompt Injection<br/>• Ẩn thông tin cá nhân PII"]
+        EmergencyCheck{"Emergency Guard 115<br/>Phát hiện cấp cứu khẩn cấp?"}
+        EmergencyScreen["Giao Diện Cấp Cứu 115<br/>Hướng dẫn xử trí tức thì"]
+        IntentRouter["Intent Router<br/>Phân luồng ý định người dùng"]
+
+        subgraph Subgraphs["Các Đồ Thị Con (Subgraphs)"]
+            TriageSub["TriageGraph<br/>Thu thập 4 slot lâm sàng"]
+            RagSub["RagGraph<br/>Truy vấn 1024D pgvector"]
+            CatalogSub["CatalogGraph<br/>Tra cứu Bác sĩ & Slot trống"]
+        end
+
+        PsychologyEngine["Psychology Soothing<br/>Đồng cảm tâm lý chuyên khoa"]
+        OutputValidator["Semantic & Legal Validator<br/>Kiểm tra trích dẫn & Miễn trừ trách nhiệm"]
+    end
+
+    subgraph DataCloudLayer["LỚP CƠ SỞ DỮ LIỆU & ĐÁM MÂY AI"]
+        SupabaseDB[("Supabase Cloud PostgreSQL<br/>• Extension pgvector<br/>• 3.650 Vectors 1024-dim<br/>• RPC match_knowledge_chunks")]
+        CosmosDB[("Azure Cosmos DB Free Tier<br/>• patient_sessions (TTL 24h)<br/>• slot_holds (TTL 15m - Sub-5ms)<br/>• appointments & medical_records")]
+        GeminiPool["Google Gemini Rotation Pool<br/>(Flash-Lite / Pro - 7 API Keys)"]
+        MistralPool["Mistral Semantic Embeddings<br/>(1024-dim - 13 API Keys)"]
+    end
+
+    ClientLayer -->|REST / JSON (HTTPS)| APILayer
+    APILayer --> EngineLayer
+    ModelArmor --> EmergencyCheck
+    EmergencyCheck -->|Có nguy cơ cấp cứu| EmergencyScreen
+    EmergencyCheck -->|An toàn lâm sàng| IntentRouter
+    IntentRouter --> Subgraphs
+    Subgraphs --> PsychologyEngine
+    PsychologyEngine --> OutputValidator
+    OutputValidator --> APILayer
+
+    RagSub <-->|Cosine Search 1024D| SupabaseDB
+    CatalogSub <-->|Atomic Hold & TTL| CosmosDB
+    TriageSub <-->|Sinh phản hồi lâm sàng| GeminiPool
+    RagSub <-->|Vectorize câu hỏi| MistralPool
 ```
-+-----------------------------------------------------------------------------------+
-|                           LOP GIAO DIEN (NEXT.JS 16)                              |
-|   +---------------------+   +---------------------+   +-----------------------+   |
-|   |   Patient Portal    |   |   Doctor Panel      |   | Receptionist Approvals|   |
-|   |  - AI Chat & Triage |   |  - Patient Queue    |   |  - Slot Approval      |   |
-|   |  - Booking & QR     |   |  - Clinical Notes   |   |  - Schedule Manager   |   |
-|   +---------------------+   +---------------------+   +-----------------------+   |
-+------------------------------------------+----------------------------------------+
-                                           | REST / JSON (HTTP)
-                                           v
-+-----------------------------------------------------------------------------------+
-|                        FASTAPI DEDICATED BACKEND (PORT 8000)                      |
-|   +--------------------+ +--------------------+ +--------------------+            |
-|   |  /api/v1/chat      | |  /api/v1/triage    | |  /api/v1/bookings  |            |
-|   +--------------------+ +--------------------+ +--------------------+            |
-|                                          |                                        |
-|   +--------------------------------------v------------------------------------+   |
-|   |                 28-NODE CLINICAL TRIAGE ENGINE                            |   |
-|   |  [Model Armor] -> [Emergency Guard 115] -> [Intent Router]                |   |
-|   |  -> Subgraphs: (TriageGraph | RagGraph | CatalogGraph)                    |   |
-|   |  -> [Psychological Soothing] -> [Grounding & Legal Validator]             |   |
-|   +---------------------------------------------------------------------------+   |
-+------------------------------------------+----------------------------------------+
-                                           |
-        +----------------------------------+----------------------------------+
-        |                                  |                                  |
-        v                                  v                                  v
-+-----------------------+      +-----------------------+      +-----------------------+
-|  Supabase pgvector    |      |    Azure Cosmos DB    |      |  AI Model Providers   |
-|  - 3.650 vectors 1024D|      |  - Atomic Slot Holds  |      |  - Gemini Pool (7)    |
-|  - match_knowledge RPC|      |  - Session TTL (24h)  |      |  - Mistral Pool (13)  |
-+-----------------------+      +-----------------------+      +-----------------------+
+
+### 2.2. Quy Trình Trích Dẫn Thuần Cơ Sở Dữ Liệu (Pure Database-Driven Citations)
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Patient as Bệnh Nhân
+    participant NextJS as Frontend (Next.js 16)
+    participant FastAPI as Backend API (FastAPI)
+    participant Mistral as Mistral Embeddings (Pool 13 Keys)
+    participant Supabase as Supabase pgvector (PostgreSQL)
+    participant Cosmos as Azure Cosmos DB (Atomic Hold)
+
+    Patient->>NextJS: Gửi mô tả triệu chứng lâm sàng
+    NextJS->>FastAPI: POST /api/v1/chat/message
+    FastAPI->>Mistral: Vectorize triệu chứng -> Vector 1024 chiều
+    Mistral-->>FastAPI: Mảng Vector 1024-dim
+    FastAPI->>Supabase: RPC match_knowledge_chunks(embedding, threshold=0.40, count=5)
+    Note over Supabase: Cosine Similarity Search trên 3.650 vectors<br/>Bridge metadata: URL trực tiếp + Số QĐ-BYT
+    Supabase-->>FastAPI: Top 5 Chunks + 100% URL bài viết chính thống (Bạch Mai, Nhi TW)
+    FastAPI->>Cosmos: Tạo khóa giữ chỗ Atomic Slot Hold (doctorId, slotId, TTL=900s)
+    Cosmos-->>FastAPI: Xác nhận Slot Hold ID thành công (độ trễ < 5ms)
+    FastAPI-->>NextJS: JSON Payload: Lời khuyên + Khung giờ khám + Thẻ trích dẫn chuẩn
+    NextJS-->>Patient: Hiển thị giao diện hoàn chỉnh (Nút ↗ mở trực tiếp bài viết)
 ```
-
-### 2.2. Quy Trinh Pure Database-Driven Citations
-
-1. Nguoi dung mo ta trieu chung tai giao dien Chat.
-2. Backend tiep nhan va goi Mistral Embedding Pool (13 keys xoay vong) de chuyen hoa thanh vector 1024 chieu.
-3. Goi RPC `match_knowledge_chunks` tren Supabase Cloud PostgreSQL.
-4. PostgreSQL thuc hien tinh toan cosine similarity tren 3.650 chunks, lay 5 ket qua phu hop nhat va bridge metadata (URL bai viet truc tiep HTTP 200, So QD-BYT, Tieu de, Chuyen khoa).
-5. Fast API tra ve payload day du cho Next.js UI hien thi the trich dan voi nut lien ket mo thang vao bai viet tham chieu cua Benh vien Bach Mai, Benh vien Nhi TW hoac Cuc Quan ly Kham chua benh.
 
 ---
 
-## 3. Danh Muc 18 Chuyen Khoa Lam Sang Chuan Hoa
+## 3. Danh Mục 18 Chuyên Khoa Lâm Sàng Chuẩn Hóa
 
-| Ma Chuyen Khoa | Ten Khoa Lam Sang | Don Vi Tham Chieu | So Quyet Dinh / Phac Do |
+| Mã Chuyên Khoa | Tên Khoa Lâm Sàng | Đơn Vị Bệnh Viện Tham Chiếu | Số Hiệu Quyết Định / Phác Đồ |
 | :--- | :--- | :--- | :--- |
-| `TIM_MACH` | Khoa Tim Mach | Vien Tim Mach - BV Bach Mai | QD-3381/QD-BYT |
-| `HO_HAP` | Khoa Ho Hap | Trung tam Ho hap - BV Bach Mai | QD-2767/QD-BYT |
-| `TIEU_HOA` | Khoa Tieu Hoa - Gan Mat | Trung tam Tieu hoa - BV Bach Mai | QD-4068/QD-BYT |
-| `THAN_KINH` | Khoa Noi Than Kinh & Dot Quy | Trung tam Than kinh - BV Bach Mai | QD-3968/QD-BYT |
-| `CO_XUONG_KHOP` | Khoa Co Xuong Khop | BV Bach Mai | QD-3612/QD-BYT |
-| `DA_LIEU` | Khoa Da Lieu & Di Ung | BV Bach Mai | QD-3615/QD-BYT |
-| `TAI_MUI_HONG` | Khoa Tai Mui Hong | BV Bach Mai | QD-3860/QD-BYT |
-| `MAT` | Khoa Mat | BV Mat Trung Uong / Bach Mai | QD-3912/QD-BYT |
-| `RANG_HAM_MAT` | Khoa Rang Ham Mat | BV Rang Ham Mat Trung Uong | QD-3714/QD-BYT |
-| `NOI_TIET` | Khoa Noi Tiet & Dai Thao Duong | Cuc QLKCB - Bo Y Te | QD-5481/QD-BYT |
-| `THAN_TIET_NIEU` | Khoa Than - Tiet Nieu & Nam Hoc | BV Bach Mai | QD-3381/QD-BYT |
-| `NHI_KHOA` | Khoa Nhi | Benh vien Nhi Trung Uong | QD-3312/QD-BYT |
-| `SAN_PHU_KHOA` | Khoa San Phu Khoa | BV Bach Mai | QD-4112/QD-BYT |
-| `LAO_KHOA` | Khoa Lao Khoa & CS Nguoi Cao Tuoi | BV Bach Mai | QD-3381/QD-BYT |
-| `TAM_THAN` | Khoa Suc Khoe Tam Than | Viện Suc Khoe Tam Than - BV Bach Mai | QD-3381/QD-BYT |
-| `TRUYEN_NHIEM` | Khoa Benh Truyen Nhiem & Nhiet Doi | Cuc QLKCB - Bo Y Te | QD-1533/QD-BYT |
-| `CAP_CUU` | Khoa Cap Cuu 115 & Dot Quy | Trung tam Cap cuu A9 - BV Bach Mai | QD-3381/QD-BYT |
-| `NOI_TONG_QUAT` | Khoa Kham Benh & Noi Tong Quat | Trung tam Kham benh - BV Bach Mai | QD-3381/QD-BYT |
+| `TIM_MACH` | Khoa Tim Mạch | Viện Tim Mạch - Bệnh viện Bạch Mai | QĐ-3381/QĐ-BYT |
+| `HO_HAP` | Khoa Hô Hấp | Trung tâm Hô hấp - Bệnh viện Bạch Mai | QĐ-2767/QĐ-BYT |
+| `TIEU_HOA` | Khoa Tiêu Hóa - Gan Mật | Trung tâm Tiêu hóa - Bệnh viện Bạch Mai | QĐ-4068/QĐ-BYT |
+| `THAN_KINH` | Khoa Nội Thần Kinh & Đột Quỵ | Trung tâm Thần kinh - Bệnh viện Bạch Mai | QĐ-3968/QĐ-BYT |
+| `CO_XUONG_KHOP` | Khoa Cơ Xương Khớp | Khoa Cơ Xương Khớp - Bệnh viện Bạch Mai | QĐ-3612/QĐ-BYT |
+| `DA_LIEU` | Khoa Da Liễu & Dị Ứng | Khoa Da Liễu - Bệnh viện Bạch Mai | QĐ-3615/QĐ-BYT |
+| `TAI_MUI_HONG` | Khoa Tai Mũi Họng | Khoa Tai Mũi Họng - Bệnh viện Bạch Mai | QĐ-3860/QĐ-BYT |
+| `MAT` | Khoa Mắt | Bệnh viện Mắt Trung Ương / Bạch Mai | QĐ-3912/QĐ-BYT |
+| `RANG_HAM_MAT` | Khoa Răng Hàm Mặt | Bệnh viện Răng Hàm Mặt Trung Ương | QĐ-3714/QĐ-BYT |
+| `NOI_TIET` | Khoa Nội Tiết & Đái Tháo Đường | Cục Quản lý Khám chữa bệnh - Bộ Y Tế | QĐ-5481/QĐ-BYT |
+| `THAN_TIET_NIEU` | Khoa Thận - Tiết Niệu & Nam Học | Khoa Thận Tiết Niệu - Bệnh viện Bạch Mai | QĐ-3381/QĐ-BYT |
+| `NHI_KHOA` | Khoa Nhi | Bệnh viện Nhi Trung Ương | QĐ-3312/QĐ-BYT |
+| `SAN_PHU_KHOA` | Khoa Sản Phụ Khoa | Khoa Phụ Sản - Bệnh viện Bạch Mai | QĐ-4112/QĐ-BYT |
+| `LAO_KHOA` | Khoa Lão Khoa & Chăm Sóc Người Cao Tuổi | Bệnh viện Bạch Mai | QĐ-3381/QĐ-BYT |
+| `TAM_THAN` | Khoa Sức Khỏe Tâm Thần | Viện Sức Khỏe Tâm Thần - Bệnh viện Bạch Mai | QĐ-3381/QĐ-BYT |
+| `TRUYEN_NHIEM` | Khoa Bệnh Truyền Nhiễm & Nhiệt Đới | Cục Quản lý Khám chữa bệnh - Bộ Y Tế | QĐ-1533/QĐ-BYT |
+| `CAP_CUU` | Khoa Cấp Cứu 115 & Đột Quỵ Khẩn Cấp | Trung tâm Cấp cứu A9 - Bệnh viện Bạch Mai | QĐ-3381/QĐ-BYT |
+| `NOI_TONG_QUAT` | Khoa Khám Bệnh & Nội Tổng Quát | Trung tâm Khám bệnh - Bệnh viện Bạch Mai | QĐ-3381/QĐ-BYT |
 
 ---
 
-## 4. Cau Truc Thu Muc Du An
+## 4. Cấu Trúc Thư Mục Dự Án
 
 ```
 P-208/
-|-- backend/                       # Ma nguon Backend FastAPI
+|-- backend/                       # Mã nguồn Backend FastAPI
 |   |-- src/
-|   |   |-- agents/                # 28-Node AI Agent Graph & Subgraphs
+|   |   |-- agents/                # Đồ thị 28-Node AI Agent & Các Subgraph
 |   |   |-- api/                   # FastAPI Endpoints (chat, triage, vector, booking)
-|   |   |-- persistence/           # Azure Cosmos DB Free Tier Client Manager
-|   |   |-- repositories/          # Data Access Object Pattern
-|   |   |-- security/              # Model Armor & Guardrails Layer
-|   |   |-- services/              # Medical Embedding, LLM Pool, Psychology
-|   |   |-- config.py              # Pydantic Settings Configuration
-|   |   |-- main.py                # FastAPI Application Factory & Lifespan
-|   |-- scripts/                   # Data Ingestion, Schema SQL & Seeding Scripts
-|   |-- tests/                     # 29 Pytest Test Cases
-|   |-- Dockerfile                 # Backend Multi-Stage Container Definition
-|   |-- requirements.txt           # Backend Dependencies
-|   |-- run.py                     # Entrypoint Script
-|-- frontend/                      # Ma nguon Web UI Next.js 16
+|   |   |-- persistence/           # Trình quản lý Azure Cosmos DB Free Tier Client
+|   |   |-- repositories/          # Mẫu thiết kế Data Access Object (DAO)
+|   |   |-- security/              # Tầng bảo vệ Model Armor & Guardrails
+|   |   |-- services/              # Medical Embedding, LLM Pool, Tâm lý lâm sàng
+|   |   |-- config.py              # Cấu hình Pydantic Settings
+|   |   |-- main.py                # Khởi tạo ứng dụng FastAPI & Lifespan
+|   |-- scripts/                   # Nạp dữ liệu RAG, SQL Schema Supabase
+|   |-- tests/                     # Toàn bộ 29 ca kiểm thử Pytest
+|   |-- Dockerfile                 # Khởi dựng Container Backend đa tầng
+|   |-- requirements.txt           # Danh sách thư viện Backend chuẩn
+|   |-- run.py                     # Entrypoint khởi chạy trực tiếp
+|-- frontend/                      # Mã nguồn Web UI Next.js 16
 |   |-- src/
 |   |   |-- app/                   # App Router Pages & API Routes
-|   |   |-- components/            # UI Components (Chat, Doctor, Staff, Bookings)
+|   |   |-- components/            # Giao diện (Chat, Doctor, Staff, Bookings)
 |   |   |-- hooks/                 # Custom React Hooks
 |   |   |-- lib/                   # AI Client, API Contracts, Cosmos Helper
-|   |-- public/                    # Static Assets
-|   |-- package.json               # Frontend Dependencies & Scripts
-|   |-- next.config.ts             # Next.js Build Configuration
-|-- data/                          # Co so tri thuc y te chuan hoa
+|   |-- public/                    # Tài nguyên tĩnh
+|   |-- package.json               # Cấu hình gói thư viện Frontend
+|   |-- next.config.ts             # Cấu hình biên dịch Next.js
+|-- data/                          # Cơ sở tri thức y tế chuẩn hóa
 |   |-- vmec_prepared_knowledge_3650.jsonl  # 3.650 vectors RAG dataset
-|   |-- vmec_prepared_knowledge_3650.csv    # CSV dataset export
-|   |-- raw/                       # Tai lieu goc
-|   |-- processed/                 # Tai lieu xu ly trung gian
-|   |-- README.md                  # Huong dan quan ly du lieu
-|-- docs/                          # Tai lieu kien truc & huong dan
-|   |-- architecture_diagram.md    # So do kien truc Mermaid
-|-- eval/                          # Bo danh gia Benchmark lam sang
-|   |-- Golden Dataset.json        # 20 tinh huong danh gia Golden
-|-- mobile/                        # Module ung dung di dong (Expo React Native)
-|-- .env.example                   # File mau bien moi truong he thong
-|-- ARCHITECTURE.md                # Tai lieu dac ta kien truc 5 tru cot
-|-- Dockerfile                     # Root Production Dockerfile
-|-- docker-compose.yml             # Docker Compose orchestration
-|-- Makefile                       # Tap lenh make quan tri
-|-- pyproject.toml                 # Cua so cau hinh Python va Pytest
-|-- requirements.txt               # Root Python Dependencies
-|-- README.md                      # Tai lieu huong dan tong the nay
+|   |-- vmec_prepared_knowledge_3650.csv    # Bản xuất CSV kiểm toán
+|   |-- raw/                       # Tài liệu gốc
+|   |-- processed/                 # Tài liệu xử lý trung gian
+|   |-- README.md                  # Hướng dẫn quản lý dữ liệu
+|-- docs/                          # Tài liệu kiến trúc & hướng dẫn
+|   |-- architecture_diagram.md    # Sơ đồ kiến trúc Mermaid chi tiết
+|-- eval/                          # Bộ đánh giá Benchmark lâm sàng
+|   |-- Golden Dataset.json        # 20 tình huống lâm sàng chuẩn
+|-- mobile/                        # Module ứng dụng di động (Expo React Native)
+|-- .env.example                   # Tệp mẫu biến môi trường hệ thống
+|-- AGENTS.md                      # Quy tắc bắt buộc cho AI Agent
+|-- ARCHITECTURE.md                # Tài liệu đặc tả kiến trúc 6 tầng
+|-- CLAUDE.md                      # Tham chiếu chỉ dẫn AI Agent
+|-- Dockerfile                     # Dockerfile triển khai gốc
+|-- docker-compose.yml             # Cấu hình điều phối container
+|-- Makefile                       # Bộ lệnh quản trị nhanh
+|-- pyproject.toml                 # Cấu hình Python & Pytest
+|-- requirements.txt               # Thư viện Python toàn hệ thống
+|-- README.md                      # Tài liệu tổng thể dự án này
 ```
 
 ---
 
-## 5. Dac Ta API Endpoints Chinh
+## 5. Đặc Tả Các API Endpoints Chính
 
-### 5.1. Kiem Tra He Thong (Health & Status)
-- `GET /health`: Kiem tra trang thai song cua Backend.
-- `GET /status`: Kiem tra chi tiet ket noi Supabase, Cosmos DB, Gemini Pool va Mistral Pool.
+### 5.1. Kiểm Tra Hệ Thống (Health & Status)
+- `GET /health`: Kiểm tra trạng thái hoạt động tức thì của Backend.
+- `GET /status`: Kiểm tra chi tiết trạng thái kết nối Supabase, Cosmos DB, Gemini Pool và Mistral Pool.
 
-### 5.2. Luong Hoi Thoai & Triage AI
-- `POST /api/v1/chat/message`: Tiep nhan tin nhan nguoi dung, thuc thi 28-Node AI Agent, tra ve loi thoai lam sang kem the trich dan va danh sach khung gio kham.
-- `POST /api/v1/triage/screen`: Danh gia nhanh nguy co cap cuu 115 (Emergency Interception).
-- `POST /api/v1/triage/evaluate`: Danh gia ket qua hoi thoai 4 luot va de xuat chuyen khoa uu tien.
+### 5.2. Luồng Hội Thoại & Triage Lâm Sàng
+- `POST /api/v1/chat/message`: Tiếp nhận tin nhắn người bệnh, thực thi đồ thị 28-Node AI Agent, trả về lời khuyên lâm sàng kèm thẻ trích dẫn chuẩn và khung giờ khám gợi ý.
+- `POST /api/v1/triage/screen`: Đánh giá nhanh nguy cơ cấp cứu 115 (Emergency Interception).
+- `POST /api/v1/triage/evaluate`: Đánh giá kết quả hội thoại 4 lượt và đề xuất chuyên khoa ưu tiên.
 
-### 5.3. Truy Van Vector RAG
-- `POST /api/v1/vector/search`: Nhan cau truy van text, vectorize qua Mistral 1024D va goi Supabase RPC `match_knowledge_chunks`.
+### 5.3. Truy Vấn Vector RAG
+- `POST /api/v1/vector/search`: Nhận câu truy vấn văn bản, vectorize qua Mistral 1024D và gọi Supabase RPC `match_knowledge_chunks`.
 
-### 5.4. Dat Lich & Giu Cho
-- `POST /api/v1/bookings/hold`: Tao khoa giu cho Atomic Slot Hold tren Azure Cosmos DB (TTL 900s).
-- `POST /api/v1/bookings/confirm`: Benh nhan xac nhan lich kham, chuyen trang thai sang cho Le tan duyet.
+### 5.4. Đặt Lịch & Giữ Chỗ
+- `POST /api/v1/bookings/hold`: Tạo khóa giữ chỗ Atomic Slot Hold trên Azure Cosmos DB (TTL 900s).
+- `POST /api/v1/bookings/confirm`: Bệnh nhân xác nhận lịch khám, chuyển trạng thái sang chờ Lễ tân duyệt.
 
 ---
 
-## 6. Huong Dan Cai Dat & Khoi Chay
+## 6. Hướng Dẫn Cài Đặt & Khởi Chạy
 
-### 6.1. Yeu Cau Moi Truong
-- Python: Phien ban >= 3.11 (khuyen nghi 3.12).
-- Node.js: Phien ban >= 18.18 (khuyen nghi 20.x hoac 22.x LTS).
-- Trinh quan ly goi: `pip` va `npm`.
+### 6.1. Yêu Cầu Môi Trường
+- Python: Phiên bản >= 3.11 (khuyến nghị 3.12).
+- Node.js: Phiên bản >= 20.x LTS.
+- Trình quản lý gói: `pip` và `npm`.
 
-### 6.2. Thiet Lap Bien Moi Truong
-Sao chep file `.env.example` thanh `.env`:
+### 6.2. Thiết Lập Biến Môi Trường
+Sao chép tệp `.env.example` thành `.env`:
 ```bash
 cp .env.example .env
 ```
-Dien day du cac tham so:
+Điền đầy đủ các thông số cấu hình:
 ```env
-# Application
+# Ứng Dụng
 APP_NAME=VMEC-Dedicated-Backend
 APP_ENV=development
 APP_PORT=8000
 APP_HOST=0.0.0.0
 CORS_ORIGINS=http://localhost:3000,https://vmec-healthcare-web.vercel.app
 
-# Google Gemini Pool (7 Keys)
+# Google Gemini Rotation Pool (7 Khóa API)
 GEMINI_API_KEY=AIzaSy...
 GEMINI_API_KEY_2=AIzaSy...
 GEMINI_GENERATIVE_MODEL_1=gemini-3.1-flash-lite
 GEMINI_GENERATIVE_MODEL_2=gemini-3.5-flash-lite
 
-# Mistral Embeddings Pool (13 Keys)
+# Mistral Semantic Embeddings Pool (13 Khóa API)
 MISTRAL_API_KEY=...
 MISTRAL_API_KEY_2=...
 MISTRAL_EMBEDDING_MODEL=mistral-embed
@@ -228,63 +266,63 @@ AZURE_COSMOS_KEY=...
 AZURE_COSMOS_DATABASE=vmec_healthcare_db
 ```
 
-### 6.3. Khoi Chay Backend FastAPI (Cong 8000)
+### 6.3. Khởi Chạy Backend FastAPI (Cổng 8000)
 ```bash
-# Tao moi truong ao va cai dat thu vien
+# Tạo môi trường ảo và cài đặt thư viện
 python -m venv backend/.venv
-# Tren Windows:
+# Trên Windows:
 backend\.venv\Scripts\activate
-# Tren Linux/macOS:
+# Trên Linux/macOS:
 source backend/.venv/bin/activate
 
 pip install -r backend/requirements.txt
 
-# Khoi chay server
+# Khởi chạy server FastAPI
 uvicorn backend.src.main:app --reload --host 0.0.0.0 --port 8000
 ```
-- Swagger UI tai: `http://localhost:8000/docs`
-- ReDoc UI tai: `http://localhost:8000/redoc`
+- Tài liệu Swagger UI tại: `http://localhost:8000/docs`
+- Tài liệu ReDoc UI tại: `http://localhost:8000/redoc`
 
-### 6.4. Khoi Chay Frontend Next.js 16 (Cong 3000)
+### 6.4. Khởi Chạy Frontend Next.js 16 (Cổng 3000)
 ```bash
 cd frontend
 npm install
 npm run dev
 ```
-Truy cap trinh duyet tai: `http://localhost:3000`
+Truy cập trình duyệt tại: `http://localhost:3000`
 
 ---
 
-## 7. Kiem Thu Tu Dong & Chuan Hoa Chat Luong
+## 7. Kiểm Thử Tự Động & Chuẩn Hóa Chất Lượng
 
-### 7.1. Chay Toan Bo 29 Ca Kiem Thu Backend Pytest
+### 7.1. Chạy Toàn Bộ 29 Ca Kiểm Thử Backend Pytest
 ```bash
 pytest backend/tests -v
 ```
-Danh sach cac file test duoc kiem tra:
-- `test_agent_multiturn.py`: Hoi thoai da luot, bat cap cuu 115 va chan Prompt Injection.
-- `test_api_routes.py`: Toan bo cac routes API backend.
-- `test_embedding.py`: Mistral Embedding 1024D batch va single.
-- `test_emergency.py`: Kiem tra phat hien cap cuu cap tinh vs phu dinh/tien su.
-- `test_grounding.py`: Kiem tra tinh hop le cua trich dan va chan thuat ngu chan doan tuy tien.
-- `test_health.py`: Healthcheck va Status verification.
-- `test_llm.py`: Xoay vong Google Gemini Generative API.
-- `test_model_armor.py`: Chan credential leak, chan prompt injection, an PII.
-- `test_psychology.py`: Loi nhan an tam tam ly cho cac chuyen khoa.
-- `test_vector_search.py`: Vector search Supabase pgvector voi threshold = 0.40.
+Danh sách các hạng mục kiểm thử:
+- `test_agent_multiturn.py`: Hội thoại đa lượt, bắt cấp cứu 115 và chặn Prompt Injection.
+- `test_api_routes.py`: Toàn bộ các routes API backend (`/chat`, `/triage`, `/vector`, `/bookings`).
+- `test_embedding.py`: Mistral Embedding 1024D dạng đơn và dạng mảng theo đợt.
+- `test_emergency.py`: Kiểm tra phân biệt cấp cứu cấp tính so với phủ định / tiền sử bệnh cũ.
+- `test_grounding.py`: Kiểm tra tính hợp lệ của trích dẫn và chặn thuật ngữ chẩn đoán tùy tiện.
+- `test_health.py`: Kiểm tra trạng thái máy chủ và kết nối cơ sở dữ liệu.
+- `test_llm.py`: Xoay vòng tài nguyên Google Gemini Generative API.
+- `test_model_armor.py`: Chặn rò rỉ khóa xác thực, chặn prompt injection, ẩn thông tin PII.
+- `test_psychology.py`: Sinh lời nhắn an tâm tâm lý phù hợp với từng nhóm bệnh.
+- `test_vector_search.py`: Truy vấn độ tương đồng vector trên Supabase với ngưỡng threshold = 0.40.
 
-### 7.2. Bien Dich Frontend Next.js
+### 7.2. Biên Dịch Frontend Next.js
 ```bash
 cd frontend
 npm run build
 ```
-Xac nhan toan bo 18 routes duoc bien dich thanh cong voi 0 loi TypeScript.
+Xác nhận toàn bộ 18 routes được biên dịch thành công với 0 lỗi TypeScript.
 
 ---
 
-## 8. Tinh Nang Bao Mat & Tuan Thu Y Te
+## 8. Tính Năng An Toàn Bảo Mật & Tuân Thủ Y Tế
 
-1. Khong Tu Y Dua Ra Chan Doan: Hệ thong tuyet doi khong dung cac cum tu cam doan nhu "chan doan xac dinh", "ke don thuoc", "uong thuoc nay". Tat ca khuyen cao chi mang tinh chat dinh huong chuyen khoa va ho tro giu cho kham.
-2. Chan Cap Cuu 115 Chu Dong: Khi nguoi dung xuat hien cac trieu chung bao dong do (dau nguc du doi, kho tho va mo hoi, liet nua nguoi, sot cao co giat), he thong ngay lap tuc kich hoat giao dien khan cap va huong dan goi tong dai 115.
-3. Model Armor: Tu dong che giau thong tin dinh danh ca nhan (PII) va vo hieu hoa cac no luc thao tung prompt (Jailbreak / Prompt Injection).
-4. Co Che Human-In-The-Loop: Lich hen AI chi co gia tri giu cho tam thoi; quy trinh tiep nhan chi hoan tat khi duoc Nhan vien Le tan hoac Dieu phoi vien benh vien xac nhan tren he thong.
+1. **Nghiêm Cấm Tự Ý Chẩn Đoán & Kê Đơn**: Hệ thống tuyệt đối không dùng các cụm từ: "chẩn đoán xác định", "kê đơn thuốc", "uống thuốc này", "tăng liều", "giảm liều". Tất cả khuyến cáo chỉ mang tính chất định hướng chuyên khoa và hỗ trợ giữ chỗ khám.
+2. **Chặn Cấp Cứu 115 Chủ Động**: Khi người bệnh có các dấu hiệu nguy hiểm tính mạng (đau ngực dữ dội, khó thở vã mồ hôi, yếu liệt nửa người, sốt cao co giật), hệ thống ngay lập tức kích hoạt giao diện cấp cứu và hướng dẫn liên hệ tổng đài 115.
+3. **Bảo Vệ Dữ Liệu Định Danh Cá Nhân (PII Redaction)**: Tự động che giấu số điện thoại, số CCCD, mã thẻ BHYT trước khi chuyển vào ngữ cảnh xử lý AI.
+4. **Cơ Chế Kiểm Soát Human-In-The-Loop**: Lịch hẹn do AI khởi tạo chỉ là giữ chỗ tạm thời (`HOLD_ACTIVE`); quy trình chỉ hoàn tất khi có sự phê duyệt của Nhân viên Lễ tân hoặc Điều phối viên bệnh viện.
