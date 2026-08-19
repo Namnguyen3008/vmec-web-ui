@@ -69,7 +69,7 @@ npm install
 npm run ios
 ```
 
-Với Simulator, `EXPO_PUBLIC_API_URL=http://localhost:5000` vẫn dùng được
+Với Simulator, `EXPO_PUBLIC_API_URL=http://localhost:8000` vẫn dùng được
 bình thường (khác với thiết bị thật).
 
 ## Sự cố thường gặp

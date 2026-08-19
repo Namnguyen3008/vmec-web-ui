@@ -18,7 +18,7 @@ if BACKEND_ENV.is_file():
     load_dotenv(dotenv_path=BACKEND_ENV, override=True)
 
 RECEPTIONIST_ID = os.getenv("VERIFY_RECEPTIONIST_ID", "5ed4e1c0-965e-44c3-96df-96419a5cd78e")
-BASE_URL = os.getenv("VERIFY_API_BASE", "http://localhost:5000")
+BASE_URL = os.getenv("VERIFY_API_BASE", "http://localhost:8000")
 
 
 def main() -> int:

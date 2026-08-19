@@ -1,86 +1,19 @@
+version: "3.8"
+
 services:
   api:
     build:
       context: ..
       dockerfile: backend/Dockerfile
-    env_file:
-      - path: .env.example
-      - path: .env
-        required: false
     ports:
-      - "5000:5000"
-    depends_on:
-      mongo:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/health')"]
-      interval: 15s
-      timeout: 5s
-      retries: 5
-    restart: unless-stopped
-
-  mcp-catalog:
-    build:
-      context: ..
-      dockerfile: backend/Dockerfile
+      - "8000:8000"
     env_file:
-      - path: .env.example
-      - path: .env
-        required: false
-    command:
-      ["uvicorn", "backend.app.mcp.server:app", "--host", "0.0.0.0", "--port", "8001"]
-    expose:
-      - "8001"
-    healthcheck:
-      test:
-        ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health')"]
-      interval: 15s
-      timeout: 5s
-      retries: 5
-    restart: unless-stopped
-
-  test:
-    profiles: ["test"]
-    build:
-      context: ..
-      dockerfile: backend/Dockerfile
-    environment:
-      FLASK_ENV: test
-      AUTH_MODE: dev_anonymous
-      MONGODB_URI: mongodb://mongo:27017
-      MONGODB_DATABASE: p208_test
-      LLM_PROVIDER: openai
-      LLM_API_KEY: test-only
-      LLM_MODEL: test-only
-      RUN_MONGODB_INTEGRATION: "1"
-    depends_on:
-      mongo:
-        condition: service_healthy
-    command: ["pytest", "backend/tests", "-q"]
-
-  mongo:
-    image: mongo:7
-    ports:
-      - "27017:27017"
+      - .env
     volumes:
-      - mongo_data:/data/db
+      - ../data:/app/data
+    restart: unless-stopped
     healthcheck:
-      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-
-volumes:
-  mongo_data:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3

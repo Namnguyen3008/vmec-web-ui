@@ -1,1 +1,1 @@
-"""P-208 Flask backend package."""
+"""VMEC Healthcare FastAPI Dedicated Backend Package."""
