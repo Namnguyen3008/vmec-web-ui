@@ -33,8 +33,8 @@ async def validate_node(state: AgentState) -> dict[str, Any]:
             citations.append(
                 Citation(
                     source_id="SUPABASE_PGVECTOR",
-                    title="Phác đồ điều trị VMEC",
-                    url="https://kcb.vn/phac-do-dieu-tri",
+                    title="Quy trình Tầm Soát Bệnh Lý & Khám Tổng Quát (Trung tâm Tiêu hóa - BV Bạch Mai)",
+                    url="https://bachmai.gov.vn/bai-viet/chuyen-gia-tieu-hoa-chi-ro-4-nhom-doi-tuong-can-noi-soi-da-day-som?id=edc458b6-9103-4735-b450-f2d164dcbf36",
                 )
             )
 
@@ -42,8 +42,8 @@ async def validate_node(state: AgentState) -> dict[str, Any]:
         citations.append(
             Citation(
                 source_id="SUPABASE_PGVECTOR",
-                title="Quy chuẩn phân luồng lâm sàng VMEC",
-                url="https://moh.gov.vn/phac-do",
+                title="Quy trình Tầm Soát Bệnh Lý & Khám Tổng Quát (Trung tâm Tiêu hóa - BV Bạch Mai)",
+                url="https://bachmai.gov.vn/bai-viet/chuyen-gia-tieu-hoa-chi-ro-4-nhom-doi-tuong-can-noi-soi-da-day-som?id=edc458b6-9103-4735-b450-f2d164dcbf36",
             )
         )
 
