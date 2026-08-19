@@ -1,102 +1,95 @@
-# Hướng Dẫn Dành Cho AI Agent Phát Triển Dự Án VMEC Healthcare (Team P-208)
+# AGENTS.md — VMEC-01 Production Implementation Rules
 
-## 1. Phạm Vi Áp Dụng & Nguồn Chuẩn (Source of Truth)
+## Mission
 
-Tài liệu này là quy chuẩn bắt buộc áp dụng cho toàn bộ AI Agent (Antigravity, Codex, Claude Code, Cursor, Copilot) khi làm việc trên repository VMEC Healthcare.
+Build a complete production-oriented Vietnamese medical specialty-routing, multi-turn clinical triage, and appointment-booking product. Do not stop at plans, scaffolds, mock screens, partial demos, or generated code that has not been executed and tested.
 
-### 1.1. Nguồn Tham Chiếu Chuẩn Xác:
-- **Kiến trúc tổng thể & Sơ đồ hệ thống**: [`ARCHITECTURE.md`](ARCHITECTURE.md) và [`docs/architecture_diagram.md`](docs/architecture_diagram.md).
-- **Tổng quan sản phẩm, danh mục 18 chuyên khoa & API**: [`README.md`](README.md).
-- **Cấu hình & Biến môi trường**: [`backend/src/config.py`](backend/src/config.py) và [`.env.example`](.env.example).
-- **Cơ sở dữ liệu RAG chuẩn hóa**: [`data/vmec_prepared_knowledge_3650.jsonl`](data/vmec_prepared_knowledge_3650.jsonl) và [`backend/scripts/supabase_schema_and_seed.sql`](backend/scripts/supabase_schema_and_seed.sql).
+## Repository boundary & Workspace
 
----
+- Work inside this repository unless the master prompt explicitly requires a read-only external check.
+- Inspect current Git state before editing. Preserve user work.
+- Primary working branch: `main`.
+- Keep focused, concise commit messages after verified milestones.
 
-## 2. Kiến Trúc Chuẩn Hiện Tại Của Dự Án (5 Trụ Cột Cốt Lõi)
+## Secrets and privacy
 
-Tuyệt đối không được nhầm lẫn với các bản thiết kế thử nghiệm cũ (như Flask, MongoDB, Redis hay ChromaDB). Kiến trúc chính thức 100% của dự án là:
+- Never print, log, copy, screenshot, commit, or disclose secrets.
+- Never enumerate the complete environment.
+- It is permitted to check whether API keys exist, but never display their values.
+- Do not expose Gemini, Mistral, Supabase, or Cosmos credentials to the browser client.
+- Do not commit source datasets, extracted data, runtime volumes, caches, generated embeddings, or `.env` files.
+- Never log raw symptom text, medical notes, free-text PHI, session cookies, authorization headers, or prompts containing patient data.
+- Do not claim clinical, legal, privacy, or security approval without explicit evidence.
 
-1. **Frontend Web UI (`frontend/`)**:
-   - Next.js 16 (App Router, Turbopack, Tailwind CSS, TypeScript).
-   - Cơ chế Pure Database-Driven Citations: Trích dẫn trực tiếp mã Quyết định Bộ Y Tế và URL bài viết lâm sàng chính thống hoạt động thực tế (HTTP 200 OK).
-   - Role Switcher thời gian thực: Bệnh nhân (Patient), Bác sĩ (Doctor), Lễ tân (Receptionist).
+## Immutable product rules
 
-2. **Backend Dedicated API (`backend/src/`)**:
-   - Python 3.12, **FastAPI**, Uvicorn ASGI Server, Pydantic v2 Settings.
-   - Chạy độc lập trên cổng **8000** (stateless architecture).
-   - Entrypoint khởi chạy: `backend/run.py` hoặc `uvicorn backend.src.main:app --port 8000`.
+- Emergency detection (115 Acute Guard) executes before LLM, RAG, memory, or booking.
+- The assistant may suggest a specialty; it must not diagnose, prescribe, change medication, or give individualized treatment.
+- Every patient-facing specialty suggestion includes Pure Database-Driven Citations (direct official hospital article URLs & MOH Decision codes) and the Vietnamese disclaimer.
+- Patient confirmation and staff/receptionist approval are both required before an appointment reaches `CONFIRMED`.
+- Rescheduling requires patient reconfirmation.
+- AI may propose tools; trusted server code (FastAPI) validates and executes them.
+- No model-generated specialty, service, practitioner, facility, slot, source, or action may bypass allowlists and database checks.
+- Production data mode fails closed when an approved corpus is absent.
 
-3. **AI Clinical Triage Engine 28-Node (`backend/src/agents/`)**:
-   - Đồ thị điều phối hội thoại lâm sàng 28-node với 3 Subgraphs:
-     + `TriageGraph`: Thu thập 4 slot lâm sàng (Triệu chứng chính -> Tính chất/Khởi phát -> Thời gian diễn tiến -> Dấu hiệu kèm theo/Cảnh báo đỏ).
-     + `RagGraph`: Truy vấn ngữ nghĩa 1024 chiều qua Supabase pgvector.
-     + `CatalogGraph`: Khám phá bác sĩ và khung giờ khám trống thời gian thực.
-   - Tích hợp Model Armor (chống Prompt Injection, rò rỉ secret, ẩn PII) và Emergency Guard 115.
-   - Module đồng cảm y khoa chuyên sâu: `backend/src/services/psychology.py`.
+## Technology Stack & Architecture Reference
 
-4. **Cơ Sở Dữ Liệu Tri Thức & Vector RAG (`Supabase pgvector`)**:
-   - Supabase Cloud PostgreSQL tích hợp extension `pgvector`.
-   - 3.650 vectors 1024 chiều (Mistral Embeddings) chuẩn hóa từ phác đồ Bộ Y Tế.
-   - RPC `public.match_knowledge_chunks` thực hiện cosine similarity search kết hợp bridge metadata trích dẫn bài viết bệnh viện trực tiếp.
+- **Backend**: FastAPI (Python 3.12, Uvicorn, Stateless API, Port 8000). All backend code lives in `backend/src/` and tests in `backend/tests/`.
+- **Frontend**: Next.js 16 (App Router, Turbopack, Tailwind CSS, Pure Database-Driven Citations).
+- **Clinical Triage Engine**: 28-Node LangGraph State Machine with 3 Subgraphs (`TriageGraph`, `RagGraph`, `CatalogGraph`).
+- **Knowledge Base & Vector RAG**: Supabase Cloud PostgreSQL + `pgvector` (3,650 vectors 1024-dim Mistral Embeddings, RPC `match_knowledge_chunks`).
+- **Atomic Slot Holding & Session Storage**: Azure Cosmos DB Free Tier (`slot_holds` with 900s TTL, `patient_sessions` with 24h TTL).
+- **AI Models**: Google Gemini Rotation Pool (Flash-Lite / Pro, 7 API Keys) + Mistral Semantic Embeddings Pool (13 API Keys).
 
-5. **State & Slot Hold Engine (`Azure Cosmos DB Free Tier`)**:
-   - Azure Cosmos DB (`slot_holds` với Atomic Locking sub-5ms, TTL 900s tự hủy).
-   - `patient_sessions` lưu trữ trạng thái hội thoại đa lượt (TTL 24h).
-   - `medical_records`, `appointments`, `audit_logs`.
+## Required workflow
 
-6. **AI Model Pools**:
-   - Google Gemini Rotation Pool (7 API Keys: `gemini-3.1-flash-lite`, `gemini-3.5-flash-lite`).
-   - Mistral Embedding Rotation Pool (13 API Keys: `mistral-embed`, 1024 dimensions).
+1. Consult canonical architectural documents:
+   - `ARCHITECTURE.md` (System architecture, 5 technology pillars, 28-node graph, data schemas)
+   - `README.md` (System overview, setup guide, testing instructions)
+2. Audit the repository and data files before making structural modifications.
+3. Implement in clean, coherent milestones.
+4. After every milestone:
+   - Run backend tests: `pytest backend/tests/ -v` (ensure all 29 tests pass).
+   - Run frontend build: `npm run build` in `frontend/` (ensure 18/18 routes compile with 0 errors).
+   - Fix failures rather than weaken tests.
+   - Create a focused commit with a short, concise message.
 
----
+## Code quality & Guidelines
 
-## 3. Quy Tắc Triển Khai Mã Nguồn (Code Rules)
+- Python 3.12+, Ruff, strict typing, pytest and structured error handling.
+- TypeScript strict mode; avoid broad `any`.
+- Validate AI structured output with Pydantic and semantic domain rules.
+- Maintain documentation integrity: no emojis/icons in `README.md`.
+- Commit message rule: keep commit comments short, concise, and focused.
 
-### 3.1. Quy Tắc Backend:
-- Toàn bộ mã nguồn backend bắt buộc nằm trong `backend/src/`.
-- Không tạo thêm code ngoài `backend/src/`.
-- Kiểm thử bắt buộc đặt tại `backend/tests/` và phải đảm bảo chạy vượt qua toàn bộ 29 ca kiểm thử (`pytest backend/tests -v`).
+<!-- gitnexus:start -->
+# GitNexus — Code Intelligence
 
-### 3.2. Quy Tắc Frontend:
-- Toàn bộ mã nguồn Web UI nằm trong `frontend/src/`.
-- Tuân thủ nghiêm ngặt Next.js 16 App Router.
-- Luôn đảm bảo lệnh `npm run build` trong `frontend/` biên dịch thành công 18/18 routes không lỗi TypeScript.
+This project is indexed by GitNexus as **P-208**. Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
-### 3.3. Quy Tắc An Toàn Y Tế & Guardrails:
-- Tuyệt đối không sinh phản hồi khẳng định chẩn đoán xác định hoặc kê đơn thuốc ("chẩn đoán bệnh X", "uống thuốc Y").
-- Khi phát hiện dấu hiệu cấp cứu báo động đỏ (đau ngực dữ dội, khó thở vã mồ hôi, liệt nửa người), lập tức kích hoạt Emergency Interception 115.
-- Mọi lịch hẹn qua AI chỉ có giá trị giữ chỗ tạm thời (`HOLD_ACTIVE`); cần sự xác nhận của Lễ tân/Điều phối viên (Human-in-the-loop) để hoàn tất.
+## Always Do
 
----
+- **MUST run impact analysis before editing any symbol.** Before modifying a function, class, or method, run `impact({target: "symbolName", direction: "upstream"})` and report the blast radius (direct callers, affected processes, risk level) to the user.
+- **MUST run `detect_changes()` before committing** to verify your changes only affect expected symbols and execution flows.
+- **MUST warn the user** if impact analysis returns HIGH or CRITICAL risk before proceeding with edits.
+- When exploring unfamiliar code, use `query({search_query: "concept"})` to find execution flows instead of grepping.
+- When you need full context on a specific symbol — callers, callees, which execution flows it participates in — use `context({name: "symbolName"})`.
+- For security review, `explain({target: "fileOrSymbol"})` lists taint findings.
 
-## 4. Vùng Cấm (Restricted Areas)
+## Never Do
 
-- Không đọc, không sửa, không di chuyển hoặc xóa các file liên quan đến AI Log và Log Hooks:
-  + `.ai-log/**`
-  + `scripts/log_antigravity.py`, `scripts/log_hook.py`, `scripts/log_manual.py`, `scripts/submit_log.py`
-  + `scripts/setup_hooks.ps1`, `scripts/setup_hooks.sh`
+- NEVER edit a function, class, or method without first running `impact` on it.
+- NEVER ignore HIGH or CRITICAL risk warnings from impact analysis.
+- NEVER rename symbols with find-and-replace — use `rename` which understands the call graph.
+- NEVER commit changes without running `detect_changes()` to check affected scope.
 
----
+## Resources
 
-## 5. Danh Mục 18 Chuyên Khoa Chuẩn Hóa
+| Resource | Use for |
+|----------|---------|
+| `gitnexus://repo/P-208/context` | Codebase overview, check index freshness |
+| `gitnexus://repo/P-208/clusters` | All functional areas |
+| `gitnexus://repo/P-208/processes` | All execution flows |
+| `gitnexus://repo/P-208/process/{name}` | Step-by-step execution trace |
 
-| Mã Code | Chuyên Khoa | Đơn Vị Bệnh Viện Tham Chiếu | Số Quyết Định BYT |
-| :--- | :--- | :--- | :--- |
-| `TIM_MACH` | Khoa Tim Mạch | Viện Tim Mạch - BV Bạch Mai | QĐ-3381/QĐ-BYT |
-| `HO_HAP` | Khoa Hô Hấp | Trung tâm Hô hấp - BV Bạch Mai | QĐ-2767/QĐ-BYT |
-| `TIEU_HOA` | Khoa Tiêu Hóa - Gan Mật | Trung tâm Tiêu hóa - BV Bạch Mai | QĐ-4068/QĐ-BYT |
-| `THAN_KINH` | Khoa Nội Thần Kinh & Đột Quỵ | Trung tâm Thần kinh - BV Bạch Mai | QĐ-3968/QĐ-BYT |
-| `CO_XUONG_KHOP` | Khoa Cơ Xương Khớp | Khoa Cơ Xương Khớp - BV Bạch Mai | QĐ-3612/QĐ-BYT |
-| `DA_LIEU` | Khoa Da Liễu & Dị Ứng | Khoa Da Liễu - BV Bạch Mai | QĐ-3615/QĐ-BYT |
-| `TAI_MUI_HONG` | Khoa Tai Mũi Họng | Khoa Tai Mũi Họng - BV Bạch Mai | QĐ-3860/QĐ-BYT |
-| `MAT` | Khoa Mắt | BV Mắt Trung Ương / Bạch Mai | QĐ-3912/QĐ-BYT |
-| `RANG_HAM_MAT` | Khoa Răng Hàm Mặt | BV Răng Hàm Mặt Trung Ương | QĐ-3714/QĐ-BYT |
-| `NOI_TIET` | Khoa Nội Tiết & Đái Tháo Đường | Cục Quản lý Khám chữa bệnh | QĐ-5481/QĐ-BYT |
-| `THAN_TIET_NIEU` | Khoa Thận - Tiết Niệu & Nam Học | Khoa Thận Tiết Niệu - BV Bạch Mai | QĐ-3381/QĐ-BYT |
-| `NHI_KHOA` | Khoa Nhi | Bệnh viện Nhi Trung Ương | QĐ-3312/QĐ-BYT |
-| `SAN_PHU_KHOA` | Khoa Sản Phụ Khoa | Khoa Phụ Sản - BV Bạch Mai | QĐ-4112/QĐ-BYT |
-| `LAO_KHOA` | Khoa Lão Khoa & CS Người Cao Tuổi | BV Bạch Mai | QĐ-3381/QĐ-BYT |
-| `TAM_THAN` | Khoa Sức Khỏe Tâm Thần | Viện Sức Khỏe Tâm Thần - BV Bạch Mai | QĐ-3381/QĐ-BYT |
-| `TRUYEN_NHIEM` | Khoa Bệnh Truyền Nhiễm & Nhiệt Đới | Cục Quản lý Khám chữa bệnh | QĐ-1533/QĐ-BYT |
-| `CAP_CUU` | Khoa Cấp Cứu 115 & Đột Quỵ | Trung tâm Cấp cứu A9 - BV Bạch Mai | QĐ-3381/QĐ-BYT |
-| `NOI_TONG_QUAT` | Khoa Khám Bệnh & Nội Tổng Quát | Trung tâm Khám bệnh - BV Bạch Mai | QĐ-3381/QĐ-BYT |
+<!-- gitnexus:end -->
