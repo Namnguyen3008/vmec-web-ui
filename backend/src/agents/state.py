@@ -74,6 +74,8 @@ class SessionDocument(BaseModel):
     soothing_payload: PsychologicalSoothingPayload | None = None
     appointment_offers: list[AppointmentOffer] = Field(default_factory=list)
     last_updated: str = ""
+    active_workflow: str = ""  # Track in-flight workflow state
+    intent: str = ""  # Last classified intent
     ttl: int = 86400  # 24 hours
 
 
@@ -128,3 +130,13 @@ class AgentState(TypedDict, total=False):
     soothing_payload: dict[str, Any] | None
     appointment_offers: list[dict[str, Any]]
     metadata: dict[str, Any]
+
+    # 28-Node Chat Flow: Routing & Workflow State
+    is_medical: bool  # True if message is medical-relevant
+    intent: str  # "CATALOG" | "MEDICAL" | "OTHER"
+    active_workflow: str  # Current active workflow type or empty
+    workflow_action: str  # "CONTINUE" | "INTERRUPT" | "CANCEL" | "NONE"
+    sanitized_message: str  # Message after Model Armor sanitization
+    audit_events: list[dict[str, Any]]  # Accumulated audit events for batch commit
+    rag_enabled: bool  # Feature flag: RAG retrieval enabled
+    mcp_enabled: bool  # Feature flag: MCP catalog enabled

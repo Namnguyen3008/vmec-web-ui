@@ -93,6 +93,12 @@ class Settings(BaseSettings):
     cosmos_session_ttl_seconds: int = Field(default=86400, ge=300, le=2_592_000)  # 24h
     cosmos_slot_hold_ttl_seconds: int = Field(default=900, ge=60, le=3600)  # 15m
 
+    # Feature Flags for 28-Node Chat Flow
+    rag_enabled: bool = True
+    mcp_enabled: bool = False
+    emergency_notification_enabled: bool = False
+    input_max_length: int = Field(default=2000, ge=100, le=10000)
+
     @model_validator(mode="after")
     def validate_gemini_models(self) -> "Settings":
         configured = (self.gemini_generative_model_1, self.gemini_generative_model_2)
