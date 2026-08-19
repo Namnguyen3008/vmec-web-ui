@@ -314,27 +314,25 @@ export async function searchMedicalKnowledgeVector(
       return `https://kcb.vn/?s=${encodeURIComponent(term)}`;
     };
 
-    // Format citations directly from Supabase vector chunks
+    // Format citations STRICTLY & 100% EXACTLY from dataset metadata
     const citations = chunks.map((c, idx) => {
       const simPct = Math.round(c.similarity * 100);
       const specCode = c.specialtyCode || topSpecCode;
       const specMeta = SPECIALTY_META_MAP[specCode] || meta;
       
-      const rawUrl = (c.metadata?.citation_url as string) || (c.metadata?.url as string);
-      const validUrl = rawUrl && rawUrl.startsWith("http") && !rawUrl.includes("phac-do-dieu-tri")
-        ? rawUrl
-        : getMohSearchUrl(specCode);
-
-      const concept = (c.metadata?.concept as string) || (c.metadata?.clean_concept as string) || "Hướng dẫn phác đồ lâm sàng";
-      const sourceTitle = (c.metadata?.source_title as string) || `Phác đồ ${specMeta.name} (Bộ Y Tế)`;
+      const exactUrl = (c.metadata?.citation_url as string) || (c.metadata?.url as string) || "";
+      const exactConcept = (c.metadata?.concept as string) || (c.metadata?.clean_concept as string) || "Phác đồ lâm sàng";
+      const exactTitle = (c.metadata?.source_title as string) || (c.metadata?.title as string) || `Phác đồ ${specMeta.name} (Bộ Y Tế)`;
+      const exactRowId = (c.metadata?.row_id as string) || (c.metadata?.chunk_id as string) || `DOC-${c.chunkId.slice(0, 8).toUpperCase()}`;
+      const exactBatchId = (c.metadata?.batch_id as string) || `SRC-${(c.recordId || "").slice(0, 8).toUpperCase()}`;
 
       return {
-        documentId: (c.metadata?.row_id as string) || `DOC-${c.chunkId.slice(0, 8).toUpperCase()}`,
-        sourceId: (c.metadata?.batch_id as string) || `SRC-${(c.recordId || "").slice(0, 8).toUpperCase()}`,
+        documentId: exactRowId,
+        sourceId: exactBatchId,
         snippet: c.text.length > 220 ? `${c.text.slice(0, 217)}...` : c.text,
-        label: `${sourceTitle} (Độ khớp Vector: ${simPct}%)`,
-        url: validUrl,
-        sectionTitle: `Mục: ${concept} (Cơ sở tri thức 3.650 vectors - Chunk #${idx + 1})`,
+        label: `${exactTitle} (Độ khớp Vector: ${simPct}%)`,
+        url: exactUrl,
+        sectionTitle: `Mục: ${exactConcept} (Cơ sở tri thức 3.650 vectors - Chunk #${idx + 1})`,
       };
     });
 

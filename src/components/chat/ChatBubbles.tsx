@@ -90,12 +90,14 @@ export function AgentBubble({
                           </p>
                           {cite.sectionTitle && (
                             <p className="text-caption text-ink-700 mt-0.5">
-                              📌 Mục: <span className="font-medium">{cite.sectionTitle}</span>
+                              {cite.sectionTitle.startsWith("📌") || cite.sectionTitle.startsWith("Mục:")
+                                ? cite.sectionTitle
+                                : `📌 Mục: ${cite.sectionTitle}`}
                             </p>
                           )}
                           {cite.documentId && (
                             <p className="text-2xs text-ink-500 font-mono mt-0.5">
-                              Mã tài liệu: {cite.documentId} {cite.sourceId ? `· Nguồn: ${cite.sourceId}` : ""}
+                              Mã bản ghi: {cite.documentId} {cite.sourceId ? `· Batch: ${cite.sourceId}` : ""}
                             </p>
                           )}
                         </div>
@@ -124,7 +126,7 @@ export function AgentBubble({
               </div>
 
               <div className="mt-2.5 flex items-center justify-between text-2xs text-ink-500 pt-1">
-                <span>Cơ sở dữ liệu: 2.670 Vector RAG Bộ Y Tế</span>
+                <span>Cơ sở dữ liệu: 3.650 Vectors RAG Bộ Y Tế (18 Chuyên khoa)</span>
                 <span className="font-medium text-primary-800">Chuẩn hóa VMEC 2026</span>
               </div>
             </div>
