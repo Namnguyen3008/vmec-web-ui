@@ -1,677 +1,290 @@
-# VMEC - Hệ Thống Trợ Lý Lâm Sàng Đa Lượt & Điều Phối Lịch Khám Y Tế Thông Minh
+# VMEC Healthcare - He Thong Tro Ly Y Te AI Dieu Huong Chuyen Khoa & Dat Lich Kham
 
-P-208 là trợ lý AI hỗ trợ định hướng chuyên khoa và đặt lịch khám có kiểm duyệt của con người. Hướng dẫn này phản ánh **mã đang chạy trong repository**:
-
-- Backend Flask nằm tại thư mục [backend](backend), chạy ở cổng 5000.
-- Frontend Next.js nằm tại thư mục [frontend](frontend), chạy ở cổng 3000.
-- MongoDB và Redis có thể chạy local qua Docker Compose.
-- Supabase được dùng cho Auth, PostgreSQL/pgvector, lịch hẹn và QR; đây là phần tích hợp tùy chọn ở lần chạy đầu.
-
-> Lưu ý: các tệp cấu hình ở thư mục gốc như requirements.txt, pyproject.toml, Dockerfile, docker-compose.yml và Makefile vẫn thuộc khung FastAPI cũ trên cổng 8000. Không dùng chúng để chạy hệ thống hiện tại; hãy dùng cấu hình trong backend và frontend.
-
-## Yêu cầu
-
-- Node.js 20.9 trở lên và npm.
-- Docker Desktop kèm Docker Compose (cách chạy backend được khuyến nghị).
-- CPython 3.11 nếu chạy backend hoặc test trực tiếp trên máy.
-- API key của một nhà cung cấp LLM. Backend hỗ trợ openrouter, openai, google và deepseek.
-- Một Supabase development project chỉ khi cần đăng nhập thật, đặt lịch, QR hoặc RAG.
-
-Docker Compose trong backend khởi động API, service MCP catalog nội bộ, MongoDB và Redis. MCP mặc định
-không được API sử dụng khi feature flag tắt. Compose **không** tạo PostgreSQL hay Supabase local.
-
-## Biến môi trường
-
-Nguồn cấu hình đang chạy là [backend/.env.example](backend/.env.example), [backend/app/config.py](backend/app/config.py) và [frontend/.env.example](frontend/.env.example). Hãy dùng hai tệp dưới đây; không dùng tệp env ở thư mục gốc vì chúng thuộc khung FastAPI cũ.
-
-- Backend: sao chép backend/.env.example thành backend/.env.
-- Frontend: sao chép frontend/.env.example thành frontend/.env.local.
-
-Không commit các tệp env. Mọi giá trị có hậu tố SECRET, API_KEY, JWT_SECRET, DATABASE_URL hoặc PASSWORD chỉ được đặt ở Backend. Bất kỳ biến nào bắt đầu bằng NEXT_PUBLIC_ đều được đóng gói vào trình duyệt.
-
-### Backend — backend/.env
-
-Đây là cấu hình tối thiểu để chạy chat local bằng Docker Compose. Thay giá trị placeholder bằng credential của môi trường; không dùng credential production cho local development.
-
-~~~env
-FLASK_ENV=development
-AUTH_MODE=dev_anonymous
-MONGODB_URI=mongodb://mongo:27017
-MONGODB_DATABASE=p208
-REDIS_URL=redis://redis:6379/0
-
-LLM_PROVIDER=openrouter
-LLM_API_KEY=<server-only-llm-key>
-LLM_MODEL=openai/gpt-4o-mini
-RAG_ENABLED=false
-
-CORS_ALLOWED_ORIGINS=http://localhost:3000
-LOG_LEVEL=INFO
-~~~
-
-Khi chạy Python trực tiếp trên máy host, đổi MONGODB_URI thành mongodb://localhost:27017 và REDIS_URL thành redis://localhost:6379/0. Có thể bỏ REDIS_URL nếu chấp nhận SSE chỉ có fallback in-process.
-
-#### Runtime, MongoDB, Redis và LLM
-
-| Biến | Mặc định / giá trị hợp lệ | Mục đích |
-| --- | --- | --- |
-| FLASK_ENV | development | Môi trường ứng dụng. production không cho phép AUTH_MODE=dev_anonymous. |
-| AUTH_MODE | dev_anonymous hoặc supabase_jwt | Chế độ xác thực. Dùng dev_anonymous chỉ ở local development. |
-| MONGODB_URI | code: mongodb://localhost:27017; mẫu Docker: mongodb://mongo:27017 | Kết nối lưu session, message và execution chat. |
-| MONGODB_DATABASE | p208 | Tên database MongoDB. |
-| REDIS_URL | rỗng; mẫu Docker: redis://redis:6379/0 | Redis cho publish notification giữa process. Bỏ trống sẽ dùng fallback in-process. |
-| LLM_PROVIDER | openai, openrouter, google hoặc deepseek; mặc định openrouter | Provider của model chat. |
-| LLM_API_KEY | rỗng | Bắt buộc cùng LLM_MODEL để gọi model và để endpoint ready thành công. Chỉ đặt ở Backend. |
-| LLM_MODEL | rỗng trong code; mẫu là openai/gpt-4o-mini | Tên model của provider đã chọn. |
-| LLM_TIMEOUT_SECONDS | 30; từ 1 đến 120 | Timeout gọi model. |
-| CHAT_HISTORY_LIMIT | 20; từ 1 đến 100 | Số message gần nhất đưa vào ngữ cảnh chat. |
-| CORS_ALLOWED_ORIGINS | http://localhost:3000 | Danh sách origin, cách nhau bằng dấu phẩy, được Flask cho phép gọi API. |
-| LOG_LEVEL | INFO; DEBUG, INFO, WARNING, ERROR hoặc CRITICAL | Mức log namespace backend. |
-
-#### Supabase, Auth, booking và QR
-
-| Biến | Mặc định / điều kiện | Mục đích |
-| --- | --- | --- |
-| SUPABASE_DATABASE_URL | rỗng | PostgreSQL URL dùng bởi SQLAlchemy/Alembic và kích hoạt booking stack. Hỗ trợ postgres:// và postgresql://; backend tự chuẩn hóa sang Psycopg. |
-| SUPABASE_URL | rỗng | URL project Supabase. Bắt buộc cho Auth, RAG và Supabase Storage. |
-| SUPABASE_SECRET_KEY | rỗng | Khóa server Supabase cho Data API, RAG, QR Storage và script admin/seed. Không bao giờ đưa sang Frontend. |
-| SUPABASE_SERVICE_ROLE_KEY | alias của SUPABASE_SECRET_KEY | Chỉ dùng khi môi trường đang lưu khóa server với tên legacy này. |
-| SUPABASE_ANON_KEY | rỗng | Bắt buộc cho AuthService khi AUTH_MODE=supabase_jwt. Trong tích hợp hiện tại vẫn chỉ cấu hình ở Backend. |
-| SUPABASE_JWT_SECRET | rỗng, tùy chọn | Fallback xác minh JWT HS256 legacy; token ES256/RS256 dùng JWKS từ SUPABASE_URL. |
-| RECEPTIONIST_APPROVAL_TIMEOUT_MINUTES | 30; từ 5 đến 1440 | Hạn chờ lễ tân duyệt appointment. |
-| PATIENT_CONFIRMATION_TIMEOUT_MINUTES | 15; từ 5 đến 1440 | Hạn bệnh nhân xác nhận lịch thay thế. |
-| DEFAULT_RECEPTIONIST_ID | rỗng | UUID lễ tân nhận notification mặc định khi chưa có phân công tự động. |
-| APPOINTMENT_QR_BUCKET | appointment-qr | Bucket private lưu ảnh QR sau khi appointment được xác nhận. |
-| APPOINTMENT_QR_VERIFY_BASE_URL | http://localhost:3000/verify-appointment | Base URL nhúng vào QR. Đặt domain HTTPS thật khi production. |
-| APPOINTMENT_QR_SIGNED_URL_TTL_SECONDS | 300; từ 60 đến 3600 | Thời gian sống của signed URL QR. |
-
-Để bật đăng nhập thật, cần đồng thời AUTH_MODE=supabase_jwt, SUPABASE_DATABASE_URL, SUPABASE_URL và SUPABASE_ANON_KEY. QR còn cần SUPABASE_SECRET_KEY. Với Supabase Transaction Pooler cổng 6543, backend tự tắt prepared statements và dùng NullPool.
-
-#### RAG và embedding
-
-| Biến | Mặc định / giá trị hợp lệ | Mục đích |
-| --- | --- | --- |
-| RAG_ENABLED | code: false; mẫu env: true | Bật retrieval y tế. Khi chưa có Supabase/embedding, đặt false. |
-| EMBEDDING_PROVIDER | openrouter hoặc openai; mặc định openrouter | Provider sinh vector. |
-| EMBEDDING_API_KEY | rỗng | Khóa embedding ưu tiên. Bắt buộc khi fallback không cung cấp được khóa hợp lệ. |
-| OPENROUTER_API_KEY | rỗng, fallback | Được dùng khi EMBEDDING_PROVIDER=openrouter và EMBEDDING_API_KEY rỗng. |
-| OPENAI_API_KEY | rỗng, fallback | Được dùng khi EMBEDDING_PROVIDER=openai và EMBEDDING_API_KEY rỗng. |
-| EMBEDDING_MODEL | openai/text-embedding-3-small với OpenRouter; text-embedding-3-small với OpenAI | Model embedding. |
-| EMBEDDING_DIMENSION | 1024, bắt buộc | Phải khớp schema pgvector hiện có. |
-| EMBEDDING_BATCH_SIZE | 64; từ 1 đến 2048 | Số input embedding mỗi batch. |
-| RAG_TOP_K | 4; từ 1 đến 10 | Số chunk retrieval tối đa. |
-| RAG_SIMILARITY_THRESHOLD | 0.40; từ 0 đến 1 | Ngưỡng similarity tối thiểu. |
-| RAG_MAX_CONTEXT_TOKENS | 2000; từ 256 đến 8000 | Ngân sách context RAG đưa vào model. |
-
-RAG cần RAG_ENABLED=true, SUPABASE_URL, một khóa server Supabase, embedding API key hợp lệ và EMBEDDING_MODEL. Nếu EMBEDDING_API_KEY và fallback provider đều trống, backend chỉ tái sử dụng LLM_API_KEY khi LLM_PROVIDER trùng EMBEDDING_PROVIDER.
-
-#### Langfuse tracing tùy chọn
-
-| Biến | Mặc định / điều kiện | Mục đích |
-| --- | --- | --- |
-| LANGFUSE_TRACING_ENABLED | false | Bật tracing metadata-only khi đủ các khóa bên dưới. |
-| LANGFUSE_PUBLIC_KEY | rỗng | Public key Langfuse của Backend. |
-| LANGFUSE_SECRET_KEY | rỗng | Secret key Langfuse, chỉ Backend. |
-| LANGFUSE_PSEUDONYMIZATION_KEY | rỗng; tối thiểu 32 byte UTF-8 | Khóa HMAC riêng để pseudonym hóa user/session. Không dùng lại API key. |
-| LANGFUSE_BASE_URL | https://cloud.langfuse.com | URL HTTP(S) không chứa credential; production bắt buộc HTTPS. |
-| LANGFUSE_TRACING_ENVIRONMENT | mặc định FLASK_ENV | Tên environment chữ thường, gồm chữ số, gạch nối hoặc gạch dưới. |
-| LANGFUSE_RELEASE | rỗng | Nhãn release tùy chọn. |
-| LANGFUSE_SAMPLE_RATE | 1.0; từ 0 đến 1 | Tỷ lệ lấy mẫu trace. |
-| LANGFUSE_TIMEOUT_SECONDS | 5; từ 1 đến 60 | Timeout export tracing. |
-
-Thiếu bất kỳ khóa Langfuse bắt buộc nào sẽ khiến backend dùng no-op tracing; không làm endpoint ready lỗi. Không đưa bất kỳ biến Langfuse nào sang Frontend.
-
-#### MCP tra cứu bác sĩ và lịch rảnh (tùy chọn)
-
-MCP catalog mặc định tắt. Khi bật, Flask chỉ gọi URL tĩnh trong mạng private và không mở endpoint MCP cho
-frontend. Service `mcp-catalog` trong Compose chỉ `expose` cổng 8001, không publish ra host/Internet.
-
-| Biến | Process | Mục đích |
-| --- | --- | --- |
-| MCP_CATALOG_ENABLED | API | Bật ưu tiên MCP trong CatalogGraph; production chỉ bật sau migration và smoke test. |
-| MCP_SERVER_URL | API | URL tĩnh, ví dụ `http://mcp-catalog:8001/mcp`; không cho credential/query. |
-| MCP_INTERNAL_TOKEN | Cả hai | Bearer secret nội bộ tối thiểu 32 byte; cấp qua secret store. |
-| MCP_TIMEOUT_SECONDS | API | Timeout toàn tool call, mặc định 5 giây. |
-| MCP_DATABASE_URL | MCP | DSN login chỉ-đọc kế thừa `p208_mcp_reader`; không dùng DSN API có quyền ghi. |
-| MCP_LLM_PROVIDER, MCP_LLM_API_KEY, MCP_LLM_MODEL | MCP | Model riêng cho structured Text-to-SQL catalog. |
-| MCP_LLM_TIMEOUT_SECONDS | MCP | Timeout model, mặc định 30 giây. |
-| MCP_QUERY_TIMEOUT_MS, MCP_MAX_ROWS | MCP | Mặc định 2000 ms và tối đa 50 dòng/fetch. |
-
-Migration `20260815_0007` tạo hai view private và role group nhưng không tạo login/mật khẩu. Sau khi chạy
-Alembic, DBA phải provision login runtime bên ngoài repository, grant membership role và đặt DSN vào secret
-store. Kiểm tra `http://mcp-catalog:8001/health` và `/ready` từ mạng nội bộ trước khi bật feature flag.
-
-#### Chỉ dùng cho script hoặc test
-
-| Biến | Khi nào dùng |
-| --- | --- |
-| DOCTOR_SEED_PASSWORD | Script seed bác sĩ và seed_da_lieu với --apply. |
-| RECEPTIONIST_SEED_PASSWORD | Script seed lễ tân. |
-| ACCOUNT_SEED_EMAIL_DOMAIN | Domain tài khoản của script seed hàng loạt; mặc định p208.local. |
-| VERIFY_RECEPTIONIST_ID | ID lễ tân cho helper verify_reception_api; có default demo trong script. |
-| VERIFY_API_BASE | Base API của helper verify_reception_api; mặc định http://localhost:5000. |
-| BOOKING_TEST_DATABASE_URL | Bật test integration booking PostgreSQL. Dùng database disposable vì test thay đổi schema/data. |
-| MCP_ROLE_TEST_DATABASE_URL | DSN dedicated reader để chứng minh chỉ đọc được hai view MCP, không đọc bảng gốc/ghi dữ liệu. |
-| RUN_MONGODB_INTEGRATION | Đặt 1 để bật test MongoDB integration thật. |
-
-Các tên DATABASE_URL, SUPABASE_JWKS_URL, SUPABASE_JWT_ISSUER và SUPABASE_PUBLISHABLE_KEY xuất hiện trong tài liệu kiến trúc cũ nhưng không được Backend hiện tại đọc. Dùng SUPABASE_DATABASE_URL và SUPABASE_ANON_KEY như bảng trên.
-
-### Frontend — frontend/.env.local
-
-Frontend hiện không kết nối trực tiếp Supabase hoặc database; nó chỉ gọi Flask API. Tạo frontend/.env.local từ [frontend/.env.example](frontend/.env.example):
-
-~~~env
-NEXT_PUBLIC_API_URL=http://localhost:5000
-
-# Chỉ local development khi Backend dùng AUTH_MODE=dev_anonymous.
-NEXT_PUBLIC_DEV_USER_ID=11111111-1111-4111-8111-111111111111
-NEXT_PUBLIC_DEV_USER_ROLE=PATIENT
-~~~
-
-| Biến | Mặc định / giá trị hợp lệ | Mục đích |
-| --- | --- | --- |
-| NEXT_PUBLIC_API_URL | fallback http://localhost:5000 | Base URL Flask cho API và SSE notification. Không thêm /api/v1 ở cuối; dấu / cuối sẽ tự được bỏ. |
-| NEXT_PUBLIC_DEV_USER_ID | rỗng | UUID local gửi qua X-Dev-User-Id khi không có phiên đăng nhập thật. Chỉ dùng cùng AUTH_MODE=dev_anonymous. |
-| NEXT_PUBLIC_DEV_USER_ROLE | PATIENT ở header request; RoleGuard cần đặt tường minh | Role local. RoleGuard chỉ chấp nhận PATIENT, RECEPTIONIST hoặc DOCTOR trong development. |
-
-Khi đặt NEXT_PUBLIC_DEV_USER_ID, cũng phải đặt NEXT_PUBLIC_DEV_USER_ROLE hợp lệ: API request có thể mặc định PATIENT, nhưng RoleGuard sẽ không cấp quyền dev nếu role không được đặt tường minh. Xóa cả hai biến ở production. NODE_ENV do Next.js quản lý, không cần tự thêm vào env file.
-
-## Chạy nhanh local bằng Docker
-
-Quy trình này đủ để chạy UI, chat và các guardrail ở chế độ phát triển. Nó dùng định danh phát triển, không cần Supabase.
-
-### 1. Cấu hình backend
-
-Từ thư mục gốc, tạo backend/.env từ mẫu nếu tệp này chưa tồn tại:
-
-~~~powershell
-Copy-Item backend\.env.example backend\.env
-~~~
-
-Mở backend/.env và tối thiểu đặt cấu hình sau. Không ghi API key thật vào Git.
-
-~~~env
-AUTH_MODE=dev_anonymous
-LLM_PROVIDER=openrouter
-LLM_API_KEY=<api-key-cua-ban>
-LLM_MODEL=openai/gpt-4o-mini
-RAG_ENABLED=false
-~~~
-
-Đặt RAG_ENABLED=false khi chưa cấu hình Supabase và embedding. Các giá trị MongoDB/Redis mặc định trong mẫu dùng hostname nội bộ của Docker Compose, nên giữ nguyên khi chạy theo cách này.
-
-Khởi động API, MCP catalog nội bộ, MongoDB và Redis:
-
-~~~powershell
-docker compose -f backend/docker-compose.yml up --build
-~~~
-
-Mở một terminal khác để kiểm tra:
-
-~~~powershell
-Invoke-RestMethod http://localhost:5000/health
-Invoke-RestMethod http://localhost:5000/ready
-~~~
-
-Endpoint health phải phản hồi thành công. Endpoint ready chỉ thành công khi MongoDB truy cập được, LLM được cấu hình và RAG ở trạng thái hợp lệ.
-
-### 2. Cấu hình và chạy frontend
-
-Tạo frontend/.env.local từ mẫu nếu tệp này chưa tồn tại:
-
-~~~powershell
-Copy-Item frontend\.env.example frontend\.env.local
-Set-Location frontend
-~~~
-
-Trong frontend/.env.local, dùng cấu hình phát triển sau:
-
-~~~env
-NEXT_PUBLIC_API_URL=http://localhost:5000
-NEXT_PUBLIC_DEV_USER_ID=11111111-1111-4111-8111-111111111111
-NEXT_PUBLIC_DEV_USER_ROLE=PATIENT
-~~~
-
-NEXT_PUBLIC_DEV_USER_ID phải là UUID hợp lệ. Các biến này chỉ dành cho AUTH_MODE=dev_anonymous và không phải cơ chế đăng nhập hoặc phân quyền thực; không đưa chúng lên môi trường production.
-
-Cài dependency theo lockfile và chạy Next.js:
-
-~~~powershell
-npm ci
-npm run dev
-~~~
-
-Mở [http://localhost:3000](http://localhost:3000). Frontend sẽ gọi backend tại [http://localhost:5000](http://localhost:5000).
-
-## Chạy backend trực tiếp bằng Python
-
-Dùng cách này khi cần debug backend ngoài container. Vẫn cần MongoDB và Redis; có thể chỉ bật hai service phụ thuộc bằng Docker:
-
-~~~powershell
-docker compose -f backend/docker-compose.yml up -d mongo redis
-py -3.11 -m venv .venv
-.\.venv\Scripts\python.exe -m pip install --upgrade pip
-.\.venv\Scripts\python.exe -m pip install -r backend\requirements.txt
-~~~
-
-Khi chạy Python trên máy host, sửa hai giá trị trong backend/.env vì hostname mongo và redis chỉ tồn tại trong mạng Docker:
-
-~~~env
-MONGODB_URI=mongodb://localhost:27017
-REDIS_URL=redis://localhost:6379/0
-~~~
-
-Sau đó chạy backend từ thư mục gốc:
-
-~~~powershell
-.\.venv\Scripts\python.exe -m backend.run
-~~~
-
-## Bật các tính năng Supabase
-
-Chỉ thực hiện phần này với một Supabase project development/staging riêng. Không đặt SUPABASE_SECRET_KEY, SUPABASE_SERVICE_ROLE_KEY, SUPABASE_JWT_SECRET, khóa LLM hoặc khóa embedding ở frontend.
-
-### Auth và đặt lịch thật
-
-Thêm các biến sau vào backend/.env:
-
-~~~env
-AUTH_MODE=supabase_jwt
-SUPABASE_DATABASE_URL=postgresql+psycopg://postgres.<project-ref>:<password>@<host>:5432/postgres?sslmode=require
-SUPABASE_URL=https://<project-ref>.supabase.co
-SUPABASE_ANON_KEY=<supabase-anon-key>
-SUPABASE_SECRET_KEY=<backend-only-secret-key>
-CORS_ALLOWED_ORIGINS=http://localhost:3000
-~~~
-
-SUPABASE_DATABASE_URL kích hoạt profile repository và booking stack. Nếu dùng Supabase Transaction Pooler ở cổng 6543, backend tự dùng NullPool và tắt prepared statements cho Psycopg.
-
-### Migration database
-
-Migration thay đổi schema. Sao lưu dữ liệu và chỉ chạy trên database dành riêng cho development/staging. Với một Supabase database mới, trước hết hãy xem xét và chạy script tiền đề tạo profiles/Auth trong Supabase SQL Editor:
-
-~~~text
-backend/migrations/sql/20260805_0004_create_profiles_and_auth.sql
-~~~
-
-Sau đó, khi SUPABASE_DATABASE_URL đã được cấu hình, chạy chuỗi Alembic:
-
-~~~powershell
-.\.venv\Scripts\python.exe -m alembic -c backend\alembic.ini upgrade head
-~~~
-
-Chuỗi Alembic hiện tại có revision xoá các slot AVAILABLE cũ, vì vậy không chạy mù trên database dùng chung. Các SQL script còn lại trong backend/migrations/sql là lịch sử hoặc tương thích; không chạy chồng chúng lên database đã được quản lý bằng Alembic nếu chưa có kế hoạch migration rõ ràng.
-
-### RAG với pgvector
-
-Sau khi Supabase đã được khởi tạo với migration phù hợp, bật RAG trong backend/.env:
-
-~~~env
-RAG_ENABLED=true
-EMBEDDING_PROVIDER=openrouter
-EMBEDDING_API_KEY=<embedding-api-key>
-EMBEDDING_MODEL=openai/text-embedding-3-small
-EMBEDDING_DIMENSION=1024
-~~~
-
-Embedding cần khóa hợp lệ cho đúng provider. Nếu chat và embedding cùng dùng OpenRouter, có thể để EMBEDDING_API_KEY trống để dùng lại LLM_API_KEY.
-
-Lệnh sau gọi API embedding và ghi dữ liệu vào Supabase; chỉ chạy khi bạn đã xem xét tài liệu nguồn và chi phí API:
-
-~~~powershell
-.\.venv\Scripts\python.exe -m backend.scripts.ingest_knowledge data\processed\diseases\du_lieu_benh_trieu_chung_heading.md
-~~~
-
-## Sample queries
-
-Sau khi mở giao diện tại [http://localhost:3000](http://localhost:3000), có thể nhập trực tiếp các câu dưới đây vào cửa sổ chat để thử từng luồng.
-
-### Chat và định hướng chuyên khoa
-
-- `Tôi bị nghẹt mũi, đau họng và ho nhẹ được ba ngày, tôi nên khám chuyên khoa nào?`
-- `Mắt tôi thường xuyên ngứa, đỏ và chảy nước mắt khi ra ngoài, tôi nên làm gì tiếp theo?`
-- `Tôi đau vùng thượng vị sau khi ăn và hay đầy bụng, tôi nên khám khoa nào?`
-- `Tôi bị đau đầu gối khi chạy bộ, không bị ngã hay chấn thương, nên khám chuyên khoa nào?`
-
-### RAG trên tài liệu y tế
-
-Các câu này cần `RAG_ENABLED=true`, cấu hình embedding/Supabase hợp lệ và đã ingest tài liệu kiến thức.
-
-- `Viêm mũi dị ứng thường có những triệu chứng nào?`
-- `Trào ngược dạ dày thực quản có các dấu hiệu thường gặp nào?`
-- `Những nguyên nhân phổ biến nào có thể gây đau khớp gối khi vận động?`
-- `Hãy giải thích viêm kết mạc và cho tôi biết khi nào nên đi khám.`
-
-### Tra cứu bác sĩ và lịch trống
-
-Các câu này cần booking stack, catalog bác sĩ và dữ liệu lịch trong PostgreSQL/Supabase.
-
-- `Danh sách bác sĩ khoa Tai Mũi Họng gồm những ai?`
-- `Bác sĩ nào đang nhận lịch ở khoa Hô hấp?`
-- `Bác sĩ đó còn lịch trống trong 7 ngày tới không?`
-- `Cho tôi xem các khung giờ trống của bác sĩ vừa đề xuất.`
-
-Hai câu cuối nên được gửi sau câu hỏi về bác sĩ trong cùng một phiên chat để kiểm tra khả năng dùng ngữ cảnh hội thoại.
-
-### Guardrail khẩn cấp
-
-Chỉ dùng mẫu sau trong môi trường local/test. Khi hệ thống được cấu hình đầy đủ, nội dung cấp cứu có thể tạo handover và gửi thông báo thật tới tài khoản lễ tân đang hoạt động.
-
-- `Tôi đang đau ngực dữ dội và khó thở.`
-- `Người nhà tôi đột ngột méo miệng, yếu một bên người và nói khó.`
-
-AI chỉ hỗ trợ định hướng và không thay thế chẩn đoán hoặc xử trí của nhân viên y tế.
-
-## Kiểm thử và kiểm tra chất lượng
-
-Backend:
-
-~~~powershell
-.\.venv\Scripts\python.exe -m pytest backend\tests -q
-.\.venv\Scripts\python.exe -m ruff check backend
-.\.venv\Scripts\python.exe -m ruff format --check backend
-~~~
-
-Chạy integration test MongoDB trong container:
-
-~~~powershell
-docker compose -f backend/docker-compose.yml --profile test run --rm test
-~~~
-
-Frontend, từ thư mục frontend:
-
-~~~powershell
-npm run lint
-npx tsc --noEmit
-npm run build
-~~~
-
-Các test booking dùng PostgreSQL cần một database disposable riêng; không trỏ chúng vào database có dữ liệu thật.
-
-## Khắc phục sự cố thường gặp
-
-| Hiện tượng | Cách xử lý |
-| --- | --- |
-| /health thành công nhưng /ready trả 503 | Kiểm tra MongoDB, LLM_API_KEY/LLM_MODEL và đặt RAG_ENABLED=false nếu chưa có Supabase/embedding. |
-| Backend chạy Python không kết nối được mongo hoặc redis | Đổi URI trong backend/.env sang localhost như phần chạy trực tiếp bằng Python. |
-| UI gọi nhầm cổng 8000 | Đặt NEXT_PUBLIC_API_URL=http://localhost:5000; cổng 8000 thuộc cấu hình FastAPI cũ ở thư mục gốc. |
-| Login hoặc booking trả SERVICE_UNAVAILABLE | Hoàn tất AUTH_MODE=supabase_jwt và toàn bộ cấu hình Supabase, gồm SUPABASE_DATABASE_URL. |
-| Frontend không có danh tính ở chế độ dev | Đặt NEXT_PUBLIC_DEV_USER_ID thành UUID hợp lệ rồi khởi động lại Next.js. |
-
-# VMEC - Hệ Thống Trợ Lý Lâm Sàng Đa Lượt & Điều Phối Lịch Khám Y Tế Thông Minh
-
-VMEC (Vinmec Medical Expert Copilot) là giải pháp y tế số thông minh chuẩn doanh nghiệp phục vụ phân loại lâm sàng ban đầu (Triage), thu thập triệu chứng có kiểm soát qua mô hình hội thoại đa lượt có trạng thái (Stateful Multi-Turn Clinical Agent), và điều phối đặt lịch khám chuyên khoa tự động.
-
-Hệ thống được phát triển trên kiến trúc Microservices / Monorepo hiện đại, kết hợp mô hình điều phối luồng LangGraph, cơ sở dữ liệu phân tán Azure Cosmos DB, hệ thống tìm kiếm vector ngữ nghĩa Supabase pgvector 1024 chiều, cùng tầng bảo mật dữ liệu y tế Google Model Armor.
+VMEC Healthcare (Team P-208) la nen tang Tro ly Y te AI toan dien phuc vu tiep nhan trieu chung benh nhan, lam ro tinh trang da luot (Multi-turn Clinical Triage), dinh tuyen chinh xac 18 chuyen khoa lam sang theo quy chuan Bo Y Te, tra cuu bac si phu hop va ho tro giu cho dat lich kham tu dong voi co che kiem soat Human-in-the-loop (Le tan phe duyet).
 
 ---
 
-## 1. Mục Tiêu & Nguyên Lý Thiết Kế Hệ Thống
+## 1. Tong Quan Kien Truc He Thong
 
-### 1.1. Mục tiêu cốt lõi
-- Thu thập bệnh sử có cấu trúc: Tự động hóa quá trình hỏi bệnh theo 4 nhóm trường lâm sàng chuẩn mực, giúp tiết kiệm 70% thời gian tiếp nhận ban đầu của nhân viên y tế.
-- Chống ảo giác và chặn chẩn đoán sai: Tuyệt đối không tự ý đưa ra kết luận bệnh học xác định hoặc kê đơn điều trị; mọi gợi ý chuyên khoa phải đi kèm trích dẫn văn bản quy chuẩn chính thống của Bộ Y Tế.
-- An toàn tuyệt đối trước cấp cứu: Phát hiện tức thì các dấu hiệu đe dọa tính mạng (đột quỵ, nhồi máu cơ tim, sốc phản vệ) dưới 1 mili-giây trước khi đi vào xử lý mô hình ngôn ngữ lớn (LLM).
-- Tính nhất quán và chống xung đột lịch khám: Cơ chế khóa giữ chỗ 15 phút trên tầng lưu trữ NoSQL ngăn chặn triệt để tình trạng trùng lặp lịch hẹn giữa nhiều bệnh nhân trong cùng một khung giờ.
+He thong duoc thiet ke dua tren 5 tru cot cong nghe hien dai, dam bao tinh san sang cao, do tre thap, an toan bao mat thong tin y te va trinh bay nguon goc du lieu minh bach:
 
-### 1.2. Các trụ cột kiến trúc
-- Stateful Session Lifecycle: Quản lý trạng thái hội thoại độc lập theo phiên người dùng, tự động phục hồi ngữ cảnh từ cơ sở dữ liệu sau mỗi lượt trao đổi.
-- Deterministic Guardrails First: Ưu tiên bộ lọc quy tắc tất định trước khi gọi mô hình xác suất LLM.
-- Zero Secret Exposure: Áp dụng cơ chế phân tách nghiêm ngặt giữa mã nguồn công khai và khóa bảo mật môi trường.
-- High Availability & Multi-Key Load Balancing: Cơ chế xoay vòng vòng tròn (Round-Robin) trên các nhóm API Key giúp duy trì hoạt động 24/7 không gián đoạn bởi giới hạn băng thông.
+### 1.1. Frontend Web Application (Next.js 16)
+- Xay dung tren Next.js 16 voi kien truc App Router, Turbopack engine va Tailwind CSS.
+- Tich hop he thong trich dan thuan co so du lieu (Pure Database-Driven Citations), ket noi truc tiep vao bai viet lam sang chinh thong (HTTP 200 OK) va so Hieu Quyet dinh Bo Y Te.
+- Cung cap bo chuyen doi vai tro trai nghiem tuc thi (Role Switcher) gom 3 phan he:
+  + Benh nhan (Patient Portal): Hoi thoai AI, nhan dinh tuyen chuyen khoa, giu cho lich kham, xem chi dan duong va quan ly ma QR/So benh an.
+  + Bac si (Doctor Clinical Panel): Xem hang doi benh nhan thoi gian thuc, tong hop benh an dien tu (EMR) do AI khoi tao va ghi chu ket luan kham.
+  + Le tan / Dieu phoi vien (Receptionist Approvals): Phe duyet hoac dieu chinh cac yeu cau giu cho tu dong, giam tai un tac phong kham.
+
+### 1.2. Backend Dedicated API (FastAPI)
+- Phat trien tren Python 3.12 voi framework FastAPI, Uvicorn ASGI server va Pydantic v2 Settings.
+- Kien truc Stateless Microservices phuc vu tai cong 8000, ho tro day du OpenAPI/Swagger docs, CORS da nguon va co che xu ly loi tap trung.
+
+### 1.3. AI Clinical Triage Engine (28-Node Graph)
+- He thong dieu phoi hoi thoai lam sang 28-node gom 3 subgraphs doc lap:
+  + TriageGraph: Thu thap 4 slot lam sang (Trieu chung chinh, Tinh chat/Khoi phat, Thoi gian dien tien, Dau hieu canh bao).
+  + RagGraph: Truy van tuong dong tri thuc y te 1024-chieu qua pgvector.
+  + CatalogGraph: Tra cuu bac si va lich trong theo thoi gian thuc.
+- Tich hop bo loc an toan Model Armor (phat hien Prompt Injection, lo lot PII/Credentials) va bo chan cap cuu Emergency Guard 115.
+
+### 1.4. Co So Du Lieu Tri Thuc & Vector RAG (Supabase pgvector)
+- Su dung Supabase Cloud PostgreSQL tich hop extension pgvector.
+- Luu tru 3.650 vector tri thuc y te 1024-chieu duoc chuan hoa tu phac do Bo Y Te qua Mistral Embeddings.
+- Ham luu tru RPC `public.match_knowledge_chunks` thuc hien cosine similarity search va tu dong lam giau metadata trinh bay bai viet thuc te.
+
+### 1.5. Atomic State & Slot Holding Engine (Azure Cosmos DB Free Tier)
+- Su dung Azure Cosmos DB (1.000 RU/s + 25GB Storage mien phi vinh vien).
+- Ho tro tao khoa giu cho lich kham nguyen tu (Atomic Slot Hold) voi do tre duoi 5ms va co che tu huy sau 15 phut (TTL = 900s).
+- Luu tru phien hoi thoai nguoi dung voi co che tu dong het han sau 24 gio (TTL = 86400s).
 
 ---
 
-## 2. Sơ Đồ Kiến Trúc Hệ Thống
+## 2. So Do Kien Truc & Luong Du Lieu
 
-```mermaid
-flowchart TB
-    subgraph PRESENTATION_LAYER ["TẦNG GIAO DIỆN NGƯỜI DÙNG (Next.js 16 - Vercel Edge)"]
-        UI_PATIENT["Phân hệ Bệnh nhân (Chat AI, Quick-Chips, Đặt lịch, Xem EMR)"]
-        UI_DOCTOR["Phân hệ Bác sĩ (Timeline khám bệnh, AI Copilot hỗ trợ hội chẩn)"]
-        UI_STAFF["Phân hệ Tiếp đón & Điều phối (Duyệt lịch, Quản lý hàng đợi)"]
-    end
+### 2.1. So Do Tong The (System Architecture)
 
-    subgraph API_GATEWAY_LAYER ["TẦNG CỔNG DỊCH VỤ (FastAPI ASGI - Render Dedicated Server)"]
-        FASTAPI_CORE["FastAPI Core Engine\n- CORS Middleware\n- Pydantic Settings Validation\n- Auto OpenAPI / Swagger Docs"]
-        
-        R_CHAT["/api/chat/message (Multi-turn Orchestrator)"]
-        R_TRIAGE["/api/triage/evaluate & /screen"]
-        R_VECTOR["/api/vector/search (pgvector RPC Proxy)"]
-        R_BOOK["/api/booking/hold & /confirm & /slots"]
-        R_HEALTH["/health & /status & /ready (Telemetry)"]
-    end
-
-    subgraph AGENT_ENGINE_LAYER ["TẦNG MÁY TRẠNG THÁI LÂM SÀNG (LangGraph Engine)"]
-        NODE_ARMOR["Node 1: Model Armor Security Shield"]
-        NODE_EMERGENCY["Node 2: Emergency 115 Guardrail (<1ms)"]
-        NODE_JUDGE["Node 3: Clinical Judge (+25% Gating)"]
-        NODE_INTERROGATE["Node 4: Clinical Interrogator (Hỏi + 4 Quick-Chips)"]
-        NODE_RETRIEVE["Node 5: Supabase Vector Knowledge Retrieval"]
-        NODE_GENERATE["Node 6: Clinical Synthesizer (Định hướng)"]
-        NODE_VALIDATE["Node 7: Grounding & Citation Validator"]
-        NODE_PSYCHOLOGY["Node 8: PEARLS Empathy Engine & 3 Offers"]
-    end
-
-    subgraph PERSISTENCE_LAYER ["TẦNG LƯU TRỮ DỮ LIỆU ĐÁM MÂY"]
-        subgraph COSMOS_DB ["Azure Cosmos DB (vmec_healthcare_db - 1.000 RU/s Free Tier)"]
-            COL_SESS[("patient_sessions\nPartition: /userId\nTTL: 86.400s (24h)")]
-            COL_HOLD[("slot_holds\nPartition: /doctorId\nTTL: 900s (15 phút)")]
-            COL_EMR[("medical_records\nPartition: /patientId\nTTL: -1 (Vĩnh viễn)")]
-            COL_APPT[("appointments\nPartition: /patientId\nTTL: -1 (Vĩnh viễn)")]
-            COL_AUDIT[("audit_logs\nPartition: /sessionId\nTTL: -1 (Vĩnh viễn)")]
-        end
-
-        subgraph SUPABASE_DB ["Supabase PostgreSQL 15"]
-            PG_VEC[("public.knowledge_embeddings\n2.670 Vectors 1024D (HNSW Index)\npublic.knowledge_chunks")]
-        end
-    end
-
-    subgraph AI_SERVICES_POOL ["TẦNG MÔ HÌNH TRÍ TUỆ NHÂN TẠO"]
-        GEMINI_POOL["Google Gemini Generative Pool (7 API Keys)\n- gemini-3.1-flash-lite\n- gemini-3.5-flash-lite"]
-        MISTRAL_POOL["Mistral Semantic Embedding Pool (13 API Keys)\n- Model: mistral-embed (1024D)"]
-    end
-
-    PRESENTATION_LAYER <-->|HTTPS REST API / JSON| FASTAPI_CORE
-    FASTAPI_CORE --> R_CHAT & R_TRIAGE & R_VECTOR & R_BOOK & R_HEALTH
-    R_CHAT <--> AGENT_ENGINE_LAYER
-    R_TRIAGE <--> AGENT_ENGINE_LAYER
-    R_VECTOR <--> MISTRAL_POOL
-    MISTRAL_POOL <--> PG_VEC
-    R_BOOK <--> COL_HOLD & COL_APPT & COL_AUDIT
-
-    AGENT_ENGINE_LAYER --> NODE_ARMOR --> NODE_EMERGENCY --> NODE_JUDGE
-    NODE_JUDGE --> NODE_INTERROGATE
-    NODE_JUDGE --> NODE_RETRIEVE --> NODE_GENERATE --> NODE_VALIDATE --> NODE_PSYCHOLOGY
-    
-    AGENT_ENGINE_LAYER <--> GEMINI_POOL
-    AGENT_ENGINE_LAYER <--> MISTRAL_POOL
-    AGENT_ENGINE_LAYER <--> COL_SESS
+```
++-----------------------------------------------------------------------------------+
+|                           LOP GIAO DIEN (NEXT.JS 16)                              |
+|   +---------------------+   +---------------------+   +-----------------------+   |
+|   |   Patient Portal    |   |   Doctor Panel      |   | Receptionist Approvals|   |
+|   |  - AI Chat & Triage |   |  - Patient Queue    |   |  - Slot Approval      |   |
+|   |  - Booking & QR     |   |  - Clinical Notes   |   |  - Schedule Manager   |   |
+|   +---------------------+   +---------------------+   +-----------------------+   |
++------------------------------------------+----------------------------------------+
+                                           | REST / JSON (HTTP)
+                                           v
++-----------------------------------------------------------------------------------+
+|                        FASTAPI DEDICATED BACKEND (PORT 8000)                      |
+|   +--------------------+ +--------------------+ +--------------------+            |
+|   |  /api/v1/chat      | |  /api/v1/triage    | |  /api/v1/bookings  |            |
+|   +--------------------+ +--------------------+ +--------------------+            |
+|                                          |                                        |
+|   +--------------------------------------v------------------------------------+   |
+|   |                 28-NODE CLINICAL TRIAGE ENGINE                            |   |
+|   |  [Model Armor] -> [Emergency Guard 115] -> [Intent Router]                |   |
+|   |  -> Subgraphs: (TriageGraph | RagGraph | CatalogGraph)                    |   |
+|   |  -> [Psychological Soothing] -> [Grounding & Legal Validator]             |   |
+|   +---------------------------------------------------------------------------+   |
++------------------------------------------+----------------------------------------+
+                                           |
+        +----------------------------------+----------------------------------+
+        |                                  |                                  |
+        v                                  v                                  v
++-----------------------+      +-----------------------+      +-----------------------+
+|  Supabase pgvector    |      |    Azure Cosmos DB    |      |  AI Model Providers   |
+|  - 3.650 vectors 1024D|      |  - Atomic Slot Holds  |      |  - Gemini Pool (7)    |
+|  - match_knowledge RPC|      |  - Session TTL (24h)  |      |  - Mistral Pool (13)  |
++-----------------------+      +-----------------------+      +-----------------------+
 ```
 
+### 2.2. Quy Trinh Pure Database-Driven Citations
+
+1. Nguoi dung mo ta trieu chung tai giao dien Chat.
+2. Backend tiep nhan va goi Mistral Embedding Pool (13 keys xoay vong) de chuyen hoa thanh vector 1024 chieu.
+3. Goi RPC `match_knowledge_chunks` tren Supabase Cloud PostgreSQL.
+4. PostgreSQL thuc hien tinh toan cosine similarity tren 3.650 chunks, lay 5 ket qua phu hop nhat va bridge metadata (URL bai viet truc tiep HTTP 200, So QD-BYT, Tieu de, Chuyen khoa).
+5. Fast API tra ve payload day du cho Next.js UI hien thi the trich dan voi nut lien ket mo thang vao bai viet tham chieu cua Benh vien Bach Mai, Benh vien Nhi TW hoac Cuc Quan ly Kham chua benh.
+
 ---
 
-## 3. Danh Mục Công Nghệ Sử Dụng
+## 3. Danh Muc 18 Chuyen Khoa Lam Sang Chuan Hoa
 
-| Tầng hệ thống | Công nghệ / Nền tảng | Phiên bản | Vai trò & Mục đích |
+| Ma Chuyen Khoa | Ten Khoa Lam Sang | Don Vi Tham Chieu | So Quyet Dinh / Phac Do |
 | :--- | :--- | :--- | :--- |
-| Frontend Framework | Next.js (App Router, Turbopack) | 16.3.0 | Giao diện người dùng Web, Server-Side Rendering, API Proxy |
-| UI Library | React & TypeScript | 19.0.0 / 5.x | Quản lý Component, kiểu dữ liệu tĩnh nghiêm ngặt |
-| Styling | Tailwind CSS & Lucide Icons | 3.4.x | Thiết kế giao diện y tế đáp ứng (Responsive), tối ưu trải nghiệm |
-| Frontend Hosting | Vercel Edge Network | Production | Phân phối giao diện tĩnh và máy chủ biên toàn cầu |
-| Backend Server | FastAPI & Uvicorn | Python 3.12 | Máy chủ API bất đồng bộ (Asynchronous ASGI), tài liệu OpenAPI tự động |
-| Data Validation | Pydantic v2 & Pydantic Settings | 2.13.x | Kiểm định dữ liệu đầu vào/ra, quản lý biến môi trường |
-| Orchestration | LangGraph & LangChain Core | 1.2.11 / 0.3.x | Xây dựng máy trạng thái chu trình hội thoại lâm sàng có kiểm soát |
-| Generative AI | Google Gemini API (Pool 7 Keys) | 3.1 & 3.5 Flash Lite | Xoay vòng mô hình thẩm định slot, đặt câu hỏi và tổng hợp định hướng |
-| Embedding AI | Mistral AI API (Pool 13 Keys) | mistral-embed | Sinh vector nhúng ngữ nghĩa 1024 chiều từ văn bản triệu chứng |
-| NoSQL Database | Azure Cosmos DB (NoSQL API) | 4.16.x SDK | Lưu trữ phiên hội thoại (TTL 24h), khóa giữ chỗ (TTL 15m), EMR |
-| Vector Database | Supabase PostgreSQL (pgvector) | 15.x / HNSW | Lưu trữ và truy vấn tương đồng 2.670 vector tri thức chuyên khoa Bộ Y Tế |
-| Containerization | Docker & Docker Compose | Multi-stage | Đóng gói môi trường thực thi chuẩn hóa, hỗ trợ triển khai nhanh |
-| Backend Hosting | Render Web Service (Singapore) | Python 3.12 | Máy chủ ứng dụng thường trực 24/7 |
-| Testing & Quality | Pytest, Pytest-Asyncio, Ruff | 9.1.x / 0.16.x | Bộ kiểm thử tự động 35 kịch bản và phân tích cú pháp tĩnh |
+| `TIM_MACH` | Khoa Tim Mach | Vien Tim Mach - BV Bach Mai | QD-3381/QD-BYT |
+| `HO_HAP` | Khoa Ho Hap | Trung tam Ho hap - BV Bach Mai | QD-2767/QD-BYT |
+| `TIEU_HOA` | Khoa Tieu Hoa - Gan Mat | Trung tam Tieu hoa - BV Bach Mai | QD-4068/QD-BYT |
+| `THAN_KINH` | Khoa Noi Than Kinh & Dot Quy | Trung tam Than kinh - BV Bach Mai | QD-3968/QD-BYT |
+| `CO_XUONG_KHOP` | Khoa Co Xuong Khop | BV Bach Mai | QD-3612/QD-BYT |
+| `DA_LIEU` | Khoa Da Lieu & Di Ung | BV Bach Mai | QD-3615/QD-BYT |
+| `TAI_MUI_HONG` | Khoa Tai Mui Hong | BV Bach Mai | QD-3860/QD-BYT |
+| `MAT` | Khoa Mat | BV Mat Trung Uong / Bach Mai | QD-3912/QD-BYT |
+| `RANG_HAM_MAT` | Khoa Rang Ham Mat | BV Rang Ham Mat Trung Uong | QD-3714/QD-BYT |
+| `NOI_TIET` | Khoa Noi Tiet & Dai Thao Duong | Cuc QLKCB - Bo Y Te | QD-5481/QD-BYT |
+| `THAN_TIET_NIEU` | Khoa Than - Tiet Nieu & Nam Hoc | BV Bach Mai | QD-3381/QD-BYT |
+| `NHI_KHOA` | Khoa Nhi | Benh vien Nhi Trung Uong | QD-3312/QD-BYT |
+| `SAN_PHU_KHOA` | Khoa San Phu Khoa | BV Bach Mai | QD-4112/QD-BYT |
+| `LAO_KHOA` | Khoa Lao Khoa & CS Nguoi Cao Tuoi | BV Bach Mai | QD-3381/QD-BYT |
+| `TAM_THAN` | Khoa Suc Khoe Tam Than | Viện Suc Khoe Tam Than - BV Bach Mai | QD-3381/QD-BYT |
+| `TRUYEN_NHIEM` | Khoa Benh Truyen Nhiem & Nhiet Doi | Cuc QLKCB - Bo Y Te | QD-1533/QD-BYT |
+| `CAP_CUU` | Khoa Cap Cuu 115 & Dot Quy | Trung tam Cap cuu A9 - BV Bach Mai | QD-3381/QD-BYT |
+| `NOI_TONG_QUAT` | Khoa Kham Benh & Noi Tong Quat | Trung tam Kham benh - BV Bach Mai | QD-3381/QD-BYT |
 
 ---
 
-## 4. Đặc Tả Luồng Hội Thoại Lâm Sàng Đa Lượt (LangGraph Clinical Workflow)
-
-Hệ thống triển khai giao thức phân loại 4 chặng có kiểm soát. Mỗi lượt trao đổi thành công nâng tiến độ thêm 25%, hướng dẫn người bệnh cung cấp đầy đủ thông tin trước khi đưa ra khuyến nghị chuyên khoa:
+## 4. Cau Truc Thu Muc Du An
 
 ```
-Lượt 1 (25% Tiến độ) : Thu thập Vị trí & Triệu chứng chính (chiefComplaint)
-                        --> Trích xuất sự thật lâm sàng 1 (atomic_fact_1)
-                        --> Sinh 04 Quick-Chips định hướng tính chất cơn đau
-
-Lượt 2 (50% Tiến độ) : Thu thập Tính chất, Cường độ & Hướng lan (characterTriggers)
-                        --> Trích xuất sự thật lâm sàng 2 (atomic_fact_2)
-                        --> Sinh 04 Quick-Chips định hướng thời gian
-
-Lượt 3 (75% Tiến độ) : Thu thập Thời gian, Tần suất & Diễn tiến (duration)
-                        --> Trích xuất sự thật lâm sàng 3 (atomic_fact_3)
-                        --> Sinh 04 Quick-Chips định hướng dấu hiệu kèm theo
-
-Lượt 4 (100% Tiến độ): Thu thập Dấu hiệu cảnh báo kèm theo (associatedSigns)
-                        --> Kích hoạt truy vấn Supabase pgvector RAG (1024D)
-                        --> Tổng hợp Khuyến nghị Chuyên khoa + Trích dẫn tài liệu Bộ Y Tế
-                        --> Áp dụng Khung thấu cảm PEARLS xoa dịu tâm lý
-                        --> Đề xuất 03 Khung giờ khám với Bác sĩ chuyên khoa tương ứng
+P-208/
+|-- backend/                       # Ma nguon Backend FastAPI
+|   |-- src/
+|   |   |-- agents/                # 28-Node AI Agent Graph & Subgraphs
+|   |   |-- api/                   # FastAPI Endpoints (chat, triage, vector, booking)
+|   |   |-- persistence/           # Azure Cosmos DB Free Tier Client Manager
+|   |   |-- repositories/          # Data Access Object Pattern
+|   |   |-- security/              # Model Armor & Guardrails Layer
+|   |   |-- services/              # Medical Embedding, LLM Pool, Psychology
+|   |   |-- config.py              # Pydantic Settings Configuration
+|   |   |-- main.py                # FastAPI Application Factory & Lifespan
+|   |-- scripts/                   # Data Ingestion, Schema SQL & Seeding Scripts
+|   |-- tests/                     # 29 Pytest Test Cases
+|   |-- Dockerfile                 # Backend Multi-Stage Container Definition
+|   |-- requirements.txt           # Backend Dependencies
+|   |-- run.py                     # Entrypoint Script
+|-- frontend/                      # Ma nguon Web UI Next.js 16
+|   |-- src/
+|   |   |-- app/                   # App Router Pages & API Routes
+|   |   |-- components/            # UI Components (Chat, Doctor, Staff, Bookings)
+|   |   |-- hooks/                 # Custom React Hooks
+|   |   |-- lib/                   # AI Client, API Contracts, Cosmos Helper
+|   |-- public/                    # Static Assets
+|   |-- package.json               # Frontend Dependencies & Scripts
+|   |-- next.config.ts             # Next.js Build Configuration
+|-- data/                          # Co so tri thuc y te chuan hoa
+|   |-- vmec_prepared_knowledge_3650.jsonl  # 3.650 vectors RAG dataset
+|   |-- vmec_prepared_knowledge_3650.csv    # CSV dataset export
+|   |-- raw/                       # Tai lieu goc
+|   |-- processed/                 # Tai lieu xu ly trung gian
+|   |-- README.md                  # Huong dan quan ly du lieu
+|-- docs/                          # Tai lieu kien truc & huong dan
+|   |-- architecture_diagram.md    # So do kien truc Mermaid
+|-- eval/                          # Bo danh gia Benchmark lam sang
+|   |-- Golden Dataset.json        # 20 tinh huong danh gia Golden
+|-- mobile/                        # Module ung dung di dong (Expo React Native)
+|-- .env.example                   # File mau bien moi truong he thong
+|-- ARCHITECTURE.md                # Tai lieu dac ta kien truc 5 tru cot
+|-- Dockerfile                     # Root Production Dockerfile
+|-- docker-compose.yml             # Docker Compose orchestration
+|-- Makefile                       # Tap lenh make quan tri
+|-- pyproject.toml                 # Cua so cau hinh Python va Pytest
+|-- requirements.txt               # Root Python Dependencies
+|-- README.md                      # Tai lieu huong dan tong the nay
 ```
 
-### 4.1. Quy chuẩn an toàn và loại trừ cấp cứu (Emergency 115)
-- Bộ sàng lọc tất định (Deterministic Screener) quét các mẫu từ khóa nguy cấp: ngưng tim, đột quỵ (FAST: méo miệng, yếu liệt tay chân, khó nói), nhồi máu cơ tim (đau ngực dữ dội kèm vã mồ hôi lạnh), sốc phản vệ, khó thở cấp tính.
-- Xử lý chính xác câu phủ định ngôn ngữ tự nhiên: *"Bệnh nhân không sốt"*, *"Tôi không thấy tức ngực"* được loại trừ an toàn, không kích hoạt báo động giả.
+---
 
-### 4.2. Bộ lọc bảo vệ Model Armor & Quyền riêng tư (DLP / PHI Masking)
-- Phát hiện và vô hiệu hóa 100% các câu lệnh cố ý phá vỡ ngữ cảnh (Prompt Injection, Jailbreak, System Prompt Leak).
-- Tự động nhận diện và làm mờ các dữ liệu định danh cá nhân nhạy cảm: Số Căn cước công dân (CCCD), Số điện thoại cá nhân, Mã thẻ bảo hiểm y tế trước khi lưu trữ hoặc chuyển tiếp qua mô hình AI.
+## 5. Dac Ta API Endpoints Chinh
+
+### 5.1. Kiem Tra He Thong (Health & Status)
+- `GET /health`: Kiem tra trang thai song cua Backend.
+- `GET /status`: Kiem tra chi tiet ket noi Supabase, Cosmos DB, Gemini Pool va Mistral Pool.
+
+### 5.2. Luong Hoi Thoai & Triage AI
+- `POST /api/v1/chat/message`: Tiep nhan tin nhan nguoi dung, thuc thi 28-Node AI Agent, tra ve loi thoai lam sang kem the trich dan va danh sach khung gio kham.
+- `POST /api/v1/triage/screen`: Danh gia nhanh nguy co cap cuu 115 (Emergency Interception).
+- `POST /api/v1/triage/evaluate`: Danh gia ket qua hoi thoai 4 luot va de xuat chuyen khoa uu tien.
+
+### 5.3. Truy Van Vector RAG
+- `POST /api/v1/vector/search`: Nhan cau truy van text, vectorize qua Mistral 1024D va goi Supabase RPC `match_knowledge_chunks`.
+
+### 5.4. Dat Lich & Giu Cho
+- `POST /api/v1/bookings/hold`: Tao khoa giu cho Atomic Slot Hold tren Azure Cosmos DB (TTL 900s).
+- `POST /api/v1/bookings/confirm`: Benh nhan xac nhan lich kham, chuyen trang thai sang cho Le tan duyet.
 
 ---
 
-## 5. Cấu Trúc Cơ Sở Dữ Liệu & Phân Vùng Lưu Trữ
+## 6. Huong Dan Cai Dat & Khoi Chay
 
-### 5.1. Azure Cosmos DB Collections (`vmec_healthcare_db`)
+### 6.1. Yeu Cau Moi Truong
+- Python: Phien ban >= 3.11 (khuyen nghi 3.12).
+- Node.js: Phien ban >= 18.18 (khuyen nghi 20.x hoac 22.x LTS).
+- Trinh quan ly goi: `pip` va `npm`.
 
-| Container Name | Partition Key | Cấu hình TTL | Mô tả dữ liệu lưu trữ |
-| :--- | :--- | :--- | :--- |
-| `patient_sessions` | `/userId` | `86.400s` (24 giờ) | Trạng thái phiên hội thoại đa lượt, tiến độ %, 4 slots dữ liệu lâm sàng, danh sách atomic facts. Tự động thu hồi sau 24h. |
-| `slot_holds` | `/doctorId` | `900s` (15 phút) | Khóa tạm thời khung giờ khám của bác sĩ trong 15 phút khi bệnh nhân mở màn hình thanh toán. Tự động giải phóng nếu quá hạn. |
-| `medical_records` | `/patientId` | `-1` (Vĩnh viễn) | Tóm tắt bệnh án điện tử (EMR) sinh ra sau khi hoàn tất phân loại lâm sàng, phục vụ bác sĩ xem trước khi khám. |
-| `appointments` | `/patientId` | `-1` (Vĩnh viễn) | Thông tin lịch khám chính thức đã được người bệnh xác nhận hoặc nhân viên lễ tân phê duyệt. |
-| `audit_logs` | `/sessionId` | `-1` (Vĩnh viễn) | Nhật ký kiểm toán bảo mật: ghi nhận sự kiện chặn mã độc Model Armor, kích hoạt cấp cứu 115, xác nhận lịch khám. |
-
-### 5.2. Supabase PostgreSQL pgvector Schema
-- Bảng `public.knowledge_embeddings`: Lưu trữ 2.670 vector tri thức y khoa 1024 chiều.
-- Chỉ mục: `HNSW (Hierarchical Navigable Small World)` với khoảng cách Cosine Similarity, cho thời gian tìm kiếm trung bình dưới 15ms.
-- Hàm gọi từ xa: `match_knowledge_chunks(query_embedding, match_threshold, match_count)`.
-
----
-
-## 6. Danh Sách Điểm Cuối Triển Khai Đám Mây (Cloud Deployment Endpoints)
-
-| Dịch vụ | Nền tảng | Địa chỉ URL công khai |
-| :--- | :--- | :--- |
-| Backend API Base | Render (Singapore) | `https://vmec-api.onrender.com` |
-| Tài liệu API tương tác (Swagger UI) | Render (Singapore) | `https://vmec-api.onrender.com/docs` |
-| Kiểm tra trạng thái máy chủ (Health) | Render (Singapore) | `https://vmec-api.onrender.com/health` |
-| Giám sát hệ thống & Database (Status) | Render (Singapore) | `https://vmec-api.onrender.com/status` |
-| Giao diện người dùng (Frontend Web) | Vercel Edge | `https://vmec-healthcare-web.vercel.app` |
-
----
-
-## 7. Hướng Dẫn Cài Đặt & Chạy Cục Bộ (Local Setup Guide)
-
-### 7.1. Yêu cầu môi trường
-- Node.js phiên bản 20.9 trở lên và npm.
-- Python phiên bản 3.12 trở lên.
-- Docker và Docker Compose (tùy chọn).
-
-### 7.2. Cấu hình biến môi trường
-Sao chép các tệp mẫu và điền thông tin cấu hình tương ứng:
-- Frontend: Sao chép `frontend/.env.example` thành `frontend/.env.local`.
-- Backend: Sao chép `backend/.env.example` thành `backend/.env`.
-
-### 7.3. Khởi chạy toàn bộ hệ thống bằng Docker Compose
+### 6.2. Thiet Lap Bien Moi Truong
+Sao chep file `.env.example` thanh `.env`:
 ```bash
-docker compose up --build
+cp .env.example .env
 ```
-- Giao diện Web: `http://localhost:3000`
-- Tài liệu API: `http://localhost:8000/docs`
+Dien day du cac tham so:
+```env
+# Application
+APP_NAME=VMEC-Dedicated-Backend
+APP_ENV=development
+APP_PORT=8000
+APP_HOST=0.0.0.0
+CORS_ORIGINS=http://localhost:3000,https://vmec-healthcare-web.vercel.app
 
-### 7.4. Khởi chạy từng phân hệ thủ công
+# Google Gemini Pool (7 Keys)
+GEMINI_API_KEY=AIzaSy...
+GEMINI_API_KEY_2=AIzaSy...
+GEMINI_GENERATIVE_MODEL_1=gemini-3.1-flash-lite
+GEMINI_GENERATIVE_MODEL_2=gemini-3.5-flash-lite
 
-#### Khởi chạy Phân hệ Giao diện (Frontend Next.js):
+# Mistral Embeddings Pool (13 Keys)
+MISTRAL_API_KEY=...
+MISTRAL_API_KEY_2=...
+MISTRAL_EMBEDDING_MODEL=mistral-embed
+MISTRAL_EMBEDDING_DIMENSIONS=1024
+
+# Supabase Cloud pgvector
+SUPABASE_URL=https://nntxlqchytvfmutmixea.supabase.co
+SUPABASE_ANON_KEY=...
+SUPABASE_SERVICE_ROLE_KEY=...
+
+# Azure Cosmos DB Free Tier
+AZURE_COSMOS_ENDPOINT=https://cosmos-vmec-ai-2026.documents.azure.com:443/
+AZURE_COSMOS_KEY=...
+AZURE_COSMOS_DATABASE=vmec_healthcare_db
+```
+
+### 6.3. Khoi Chay Backend FastAPI (Cong 8000)
+```bash
+# Tao moi truong ao va cai dat thu vien
+python -m venv backend/.venv
+# Tren Windows:
+backend\.venv\Scripts\activate
+# Tren Linux/macOS:
+source backend/.venv/bin/activate
+
+pip install -r backend/requirements.txt
+
+# Khoi chay server
+uvicorn backend.src.main:app --reload --host 0.0.0.0 --port 8000
+```
+- Swagger UI tai: `http://localhost:8000/docs`
+- ReDoc UI tai: `http://localhost:8000/redoc`
+
+### 6.4. Khoi Chay Frontend Next.js 16 (Cong 3000)
 ```bash
 cd frontend
 npm install
 npm run dev
 ```
+Truy cap trinh duyet tai: `http://localhost:3000`
 
-#### Khởi chạy Phân hệ Xử lý (Backend FastAPI):
+---
+
+## 7. Kiem Thu Tu Dong & Chuan Hoa Chat Luong
+
+### 7.1. Chay Toan Bo 29 Ca Kiem Thu Backend Pytest
 ```bash
-cd backend
-python -m venv .venv
-
-# Trên Windows:
-.\.venv\Scripts\activate
-# Trên macOS / Linux:
-source .venv/bin/activate
-
-pip install -r requirements.txt
-uvicorn src.main:app --reload --port 8000
+pytest backend/tests -v
 ```
+Danh sach cac file test duoc kiem tra:
+- `test_agent_multiturn.py`: Hoi thoai da luot, bat cap cuu 115 va chan Prompt Injection.
+- `test_api_routes.py`: Toan bo cac routes API backend.
+- `test_embedding.py`: Mistral Embedding 1024D batch va single.
+- `test_emergency.py`: Kiem tra phat hien cap cuu cap tinh vs phu dinh/tien su.
+- `test_grounding.py`: Kiem tra tinh hop le cua trich dan va chan thuat ngu chan doan tuy tien.
+- `test_health.py`: Healthcheck va Status verification.
+- `test_llm.py`: Xoay vong Google Gemini Generative API.
+- `test_model_armor.py`: Chan credential leak, chan prompt injection, an PII.
+- `test_psychology.py`: Loi nhan an tam tam ly cho cac chuyen khoa.
+- `test_vector_search.py`: Vector search Supabase pgvector voi threshold = 0.40.
 
----
-
-## 8. Kiểm Thử Tự Động & Đảm Bảo Chất Lượng (Quality Assurance)
-
-Dự án duy trì bộ kiểm thử tự động gồm 35 kịch bản bao phủ toàn bộ các tầng chức năng:
-
+### 7.2. Bien Dich Frontend Next.js
 ```bash
-cd backend
-pytest -v
+cd frontend
+npm run build
 ```
-
-### Ma trận kịch bản kiểm thử:
-- `test_agent_multiturn.py`: Kiểm thử luồng hội thoại 4 lượt, kiểm thử chặn cấp cứu 115, kiểm thử chặn injection.
-- `test_api_routes.py`: Kiểm thử toàn bộ 5 router API (`/chat`, `/triage`, `/vector`, `/booking`, `/health`), kiểm thử xác thực mã giữ chỗ không hợp lệ.
-- `test_model_armor.py`: Kiểm thử phát hiện prompt injection, kiểm thử chặn rò rỉ thông tin mật, kiểm thử làm mờ PII/PHI.
-- `test_emergency.py`: Kiểm thử phát hiện cấp cứu cấp tính, kiểm thử nhận diện câu phủ định, kiểm thử bệnh sử quá khứ.
-- `test_grounding.py`: Kiểm thử đề xuất chuyên khoa hợp lệ, kiểm thử thiếu trích dẫn, kiểm thử từ khóa chẩn đoán cấm, kiểm thử URL không thuộc whitelist.
-- `test_psychology.py`: Kiểm thử xoa dịu tâm lý khoa Tim mạch, khoa Nhi, và kịch bản fallback.
-- `test_llm.py`: Kiểm thử sinh văn bản, kiểm thử sinh cấu trúc JSON, kiểm thử an toàn luồng xoay vòng khóa API.
-- `test_embedding.py`: Kiểm thử sinh vector đơn lẻ, kiểm thử sinh vector theo lô, kiểm thử an toàn luồng xoay vòng khóa Mistral.
-- `test_vector_search.py`: Kiểm thử khớp vector Supabase, kiểm thử xử lý dữ liệu rỗng và chấm điểm độ tương đồng.
-- `test_health.py`: Kiểm thử phản hồi trạng thái máy chủ và đo độ trễ cơ sở dữ liệu.
+Xac nhan toan bo 18 routes duoc bien dich thanh cong voi 0 loi TypeScript.
 
 ---
 
-## 9. Quy Trình Phối Hợp Làm Việc Nhóm (Team Git Workflow)
+## 8. Tinh Nang Bao Mat & Tuan Thu Y Te
 
-Để đảm bảo an toàn tuyệt đối cho nhánh chính `main` đang vận hành trên máy chủ đám mây, các thành viên tuân thủ quy trình 4 bước:
-
-1. **Cập nhật mã nguồn mới nhất**:
-   ```bash
-   git checkout main
-   git pull origin main
-   ```
-2. **Tạo nhánh tính năng riêng biệt**:
-   ```bash
-   git checkout -b feature/ten-tinh-nang
-   ```
-3. **Commit và đẩy nhánh lên GitHub**:
-   ```bash
-   git add .
-   git commit -m "feat: mô tả ngắn gọn công việc"
-   git push origin feature/ten-tinh-nang
-   ```
-4. **Tạo Pull Request trên GitHub**:
-   - Truy cập giao diện GitHub, tạo Pull Request vào nhánh `main`.
-   - Sau khi kiểm tra toàn bộ test báo xanh, tiến hành Merge vào `main` để Render và Vercel tự động triển khai.
-
----
-
-## 10. Tuyên Bố Miễn Trừ Trách Nhiệm Y Tế
-
-Hệ thống VMEC được thiết kế với mục đích hỗ trợ định hướng chuyên khoa và gợi ý lịch khám bệnh lâm sàng ban đầu dựa trên các quy chuẩn tiếp nhận y tế hiện hành.
-
-Mọi thông tin do hệ thống cung cấp không cấu thành chẩn đoán y khoa chính thức, không thay thế quá trình thăm khám trực tiếp của Bác sĩ có chứng chỉ hành nghề, và không đưa ra chỉ định dùng thuốc. Trong trường hợp có dấu hiệu nguy kịch đe dọa tính mạng, người bệnh phải lập tức liên hệ Tổng đài Cấp cứu 115 hoặc đến Cơ sở Y tế gần nhất.
-
+1. Khong Tu Y Dua Ra Chan Doan: Hệ thong tuyet doi khong dung cac cum tu cam doan nhu "chan doan xac dinh", "ke don thuoc", "uong thuoc nay". Tat ca khuyen cao chi mang tinh chat dinh huong chuyen khoa va ho tro giu cho kham.
+2. Chan Cap Cuu 115 Chu Dong: Khi nguoi dung xuat hien cac trieu chung bao dong do (dau nguc du doi, kho tho va mo hoi, liet nua nguoi, sot cao co giat), he thong ngay lap tuc kich hoat giao dien khan cap va huong dan goi tong dai 115.
+3. Model Armor: Tu dong che giau thong tin dinh danh ca nhan (PII) va vo hieu hoa cac no luc thao tung prompt (Jailbreak / Prompt Injection).
+4. Co Che Human-In-The-Loop: Lich hen AI chi co gia tri giu cho tam thoi; quy trinh tiep nhan chi hoan tat khi duoc Nhan vien Le tan hoac Dieu phoi vien benh vien xac nhan tren he thong.
