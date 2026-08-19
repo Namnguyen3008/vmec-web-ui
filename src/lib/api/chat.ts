@@ -40,7 +40,7 @@ export const CLINICAL_SPECIALTIES = HOSPITAL_SPECIALTIES.map((spec) => {
         sourceId: "SUPABASE_PGVECTOR",
         documentId: `DOC-${spec.code}`,
         label: `Phác đồ chuyên khoa ${spec.name} (Bộ Y Tế)`,
-        url: "https://kcb.vn/phac-do-dieu-tri",
+        url: "https://kcb.vn/van-ban",
         sectionTitle: "Quy chuẩn phân loại & tiếp nhận lâm sàng",
         confidence: 96,
         snippet: `Bệnh nhân được điều hướng đến ${spec.name} để thăm khám và chỉ định cận lâm sàng phù hợp.`,

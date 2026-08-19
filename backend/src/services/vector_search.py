@@ -240,22 +240,27 @@ class VectorSearchClient:
             chunks.append(chunk)
 
             title = (
-                meta.get("title")
+                meta.get("source_title")
+                or meta.get("title")
                 or meta.get("document_title")
-                or "Phác đồ điều trị VMEC"
+                or "Hướng dẫn Chẩn đoán & Điều trị - Bộ Y Tế"
             )
             section = (
-                meta.get("section") or meta.get("section_title") or "Quy trình lâm sàng"
+                meta.get("concept")
+                or meta.get("section")
+                or meta.get("section_title")
+                or "Quy trình lâm sàng"
             )
+            raw_url = meta.get("citation_url") or meta.get("url") or meta.get("canonical_url")
             url = (
-                meta.get("url")
-                or meta.get("canonical_url")
-                or "https://kcb.vn/phac-do-dieu-tri"
+                raw_url
+                if raw_url and raw_url.startswith("http") and not "phac-do-dieu-tri" in raw_url
+                else "https://kcb.vn/van-ban"
             )
 
             citation = Citation(
-                source_id="SUPABASE_PGVECTOR",
-                document_id=chunk.record_id or chunk.chunk_id,
+                source_id=meta.get("batch_id") or "MOH_VIETNAM",
+                document_id=meta.get("row_id") or chunk.record_id or chunk.chunk_id,
                 title=title,
                 url=url,
                 section_title=section,

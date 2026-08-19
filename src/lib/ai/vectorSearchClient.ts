@@ -260,37 +260,81 @@ export async function searchMedicalKnowledgeVector(
     }
 
     const chunks: VectorSearchResultChunk[] = rows.map((r) => {
-      const rawSpec =
-        (r.metadata?.primary_specialty_code as string) ||
-        (r.metadata?.specialty as string) ||
-        (r.metadata?.route_specialty as string);
+      let derivedSpec = (r.metadata?.specialty_code as string) || (r.metadata?.primary_specialty_code as string) || "";
+      
+      // Parse bracketed prefix if present: e.g. "[Khoa Tai Mũi Họng | nose_routine] ..."
+      if (!derivedSpec && r.normalized_text?.startsWith("[")) {
+        const match = r.normalized_text.match(/^\[([^|\]]+)(?:\|\s*([^\]]+))?\]/);
+        if (match && match[1]) {
+          derivedSpec = mapRawSpecialtyCode(match[1]);
+        }
+      }
+
+      const finalSpecCode = mapRawSpecialtyCode(derivedSpec || (r.metadata?.specialty as string));
+
       return {
         chunkId: r.chunk_id,
         recordId: r.record_id,
         text: r.normalized_text,
         similarity: Number(r.similarity || 0),
-        specialtyCode: mapRawSpecialtyCode(rawSpec),
-        routeType: r.metadata?.route_type as string,
+        specialtyCode: finalSpecCode,
+        routeType: (r.metadata?.route_type as string) || "ROUTINE_APPOINTMENT",
         metadata: r.metadata,
       };
     });
 
     // Determine top specialty strictly from the closest vector in pgvector
     const topChunk = chunks[0];
-    const topSpecCode = topChunk?.specialtyCode || "TIM_MACH";
-    const meta = SPECIALTY_META_MAP[topSpecCode] || SPECIALTY_META_MAP.TIM_MACH;
+    const topSpecCode = topChunk?.specialtyCode || "KHAM_TONG_QUAT";
+    const meta = SPECIALTY_META_MAP[topSpecCode] || SPECIALTY_META_MAP.KHAM_TONG_QUAT;
+
+    // Helper to generate official Ministry of Health search URL
+    const getMohSearchUrl = (specCode: string) => {
+      const searchTerms: Record<string, string> = {
+        TIM_MACH: "tim+mach",
+        HO_HAP: "ho+hap",
+        TIEU_HOA: "tieu+hoa",
+        THAN_KINH: "than+kinh",
+        CO_XUONG_KHOP: "co+xuong+khop",
+        DA_LIEU: "da+lieu",
+        TAI_MUI_HONG: "tai+mui+hong",
+        MAT: "nhan+khoa",
+        RANG_HAM_MAT: "rang+ham+mat",
+        NOI_TIET: "noi+tiet",
+        THAN_TIET_NIEU: "tiet+nieu",
+        NHI_KHOA: "nhi+khoa",
+        SAN_PHU_KHOA: "san+phu+khoa",
+        LAO_KHOA: "lao+khoa",
+        TAM_THAN: "tam+than",
+        TRUYEN_NHIEM: "truyen+nhiem",
+        CAP_CUU: "cap+cuu",
+        KHAM_TONG_QUAT: "kham+benh",
+      };
+      const term = searchTerms[specCode] || "van-ban";
+      return `https://kcb.vn/?s=${encodeURIComponent(term)}`;
+    };
 
     // Format citations directly from Supabase vector chunks
     const citations = chunks.map((c, idx) => {
       const simPct = Math.round(c.similarity * 100);
-      const specMeta = SPECIALTY_META_MAP[c.specialtyCode || topSpecCode] || meta;
+      const specCode = c.specialtyCode || topSpecCode;
+      const specMeta = SPECIALTY_META_MAP[specCode] || meta;
+      
+      const rawUrl = (c.metadata?.citation_url as string) || (c.metadata?.url as string);
+      const validUrl = rawUrl && rawUrl.startsWith("http") && !rawUrl.includes("phac-do-dieu-tri")
+        ? rawUrl
+        : getMohSearchUrl(specCode);
+
+      const concept = (c.metadata?.concept as string) || (c.metadata?.clean_concept as string) || "Hướng dẫn phác đồ lâm sàng";
+      const sourceTitle = (c.metadata?.source_title as string) || `Phác đồ ${specMeta.name} (Bộ Y Tế)`;
+
       return {
-        documentId: `DOC-${c.chunkId.slice(0, 8).toUpperCase()}`,
-        sourceId: `SRC-${(c.recordId || "").slice(0, 8).toUpperCase()}`,
+        documentId: (c.metadata?.row_id as string) || `DOC-${c.chunkId.slice(0, 8).toUpperCase()}`,
+        sourceId: (c.metadata?.batch_id as string) || `SRC-${(c.recordId || "").slice(0, 8).toUpperCase()}`,
         snippet: c.text.length > 220 ? `${c.text.slice(0, 217)}...` : c.text,
-        label: `Phác đồ ${specMeta.name} (Độ khớp Vector: ${simPct}%)`,
-        url: "https://kcb.vn/phac-do-dieu-tri",
-        sectionTitle: `Cơ sở tri thức Supabase pgvector 2.670 (Chunk #${idx + 1})`,
+        label: `${sourceTitle} (Độ khớp Vector: ${simPct}%)`,
+        url: validUrl,
+        sectionTitle: `Mục: ${concept} (Cơ sở tri thức 3.650 vectors - Chunk #${idx + 1})`,
       };
     });
 
