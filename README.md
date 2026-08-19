@@ -45,26 +45,26 @@ Hệ thống được thiết kế dựa trên 5 trụ cột công nghệ hiện
 
 ```mermaid
 graph TB
-    subgraph ClientLayer["LỚP GIAO DIỆN NGƯỜI DÙNG (NEXT.JS 16)"]
+    subgraph ClientLayer["LỚP GIAO DIỆN NGƯỜI DÙNG - NEXT.JS 16"]
         PatientPortal["Bệnh Nhân (Patient Portal)<br/>• AI Chat & Triage đa lượt<br/>• Đặt lịch khám & Chỉ dẫn đường<br/>• Quản lý QR Code & Hồ sơ"]
         DoctorPanel["Bác Sĩ (Doctor Clinical Panel)<br/>• Danh sách hàng đợi khám<br/>• Trợ lý AI tóm tắt EMR<br/>• Ghi chú kết luận lâm sàng"]
         StaffPanel["Lễ Tân (Receptionist Approvals)<br/>• Phê duyệt yêu cầu đặt lịch<br/>• Điều phối lịch khám thời gian thực<br/>• Quản lý danh mục chuyên khoa"]
     end
 
-    subgraph APILayer["LỚP DỊCH VỤ BACKEND (FASTAPI - PORT 8000)"]
+    subgraph APILayer["LỚP DỊCH VỤ BACKEND - FASTAPI PORT 8000"]
         ChatAPI["/api/v1/chat/message<br/>Hội thoại & Triage AI"]
         TriageAPI["/api/v1/triage/evaluate<br/>Đánh giá & Định tuyến chuyên khoa"]
         VectorAPI["/api/v1/vector/search<br/>Truy vấn tương đồng RAG"]
         BookingAPI["/api/v1/bookings/hold<br/>Khóa giữ chỗ & Đặt lịch"]
     end
 
-    subgraph EngineLayer["28-NODE CLINICAL TRIAGE ENGINE (LANGGRAPH)"]
+    subgraph EngineLayer["28-NODE CLINICAL TRIAGE ENGINE - LANGGRAPH"]
         ModelArmor["Model Armor<br/>• Chặn Prompt Injection<br/>• Ẩn thông tin cá nhân PII"]
-        EmergencyCheck{"Emergency Guard 115<br/>Phát hiện cấp cứu khẩn cấp?"}
+        EmergencyCheck{"Emergency Guard 115<br/>Phát hiện cấp cứu khẩn cấp"}
         EmergencyScreen["Giao Diện Cấp Cứu 115<br/>Hướng dẫn xử trí tức thì"]
         IntentRouter["Intent Router<br/>Phân luồng ý định người dùng"]
 
-        subgraph Subgraphs["Các Đồ Thị Con (Subgraphs)"]
+        subgraph Subgraphs["Các Đồ Thị Con - Subgraphs"]
             TriageSub["TriageGraph<br/>Thu thập 4 slot lâm sàng"]
             RagSub["RagGraph<br/>Truy vấn 1024D pgvector"]
             CatalogSub["CatalogGraph<br/>Tra cứu Bác sĩ & Slot trống"]
@@ -77,24 +77,24 @@ graph TB
     subgraph DataCloudLayer["LỚP CƠ SỞ DỮ LIỆU & ĐÁM MÂY AI"]
         SupabaseDB[("Supabase Cloud PostgreSQL<br/>• Extension pgvector<br/>• 3.650 Vectors 1024-dim<br/>• RPC match_knowledge_chunks")]
         CosmosDB[("Azure Cosmos DB Free Tier<br/>• patient_sessions (TTL 24h)<br/>• slot_holds (TTL 15m - Sub-5ms)<br/>• appointments & medical_records")]
-        GeminiPool["Google Gemini Rotation Pool<br/>(Flash-Lite / Pro - 7 API Keys)"]
-        MistralPool["Mistral Semantic Embeddings<br/>(1024-dim - 13 API Keys)"]
+        GeminiPool["Google Gemini Rotation Pool<br/>Flash-Lite / Pro - 7 API Keys"]
+        MistralPool["Mistral Semantic Embeddings<br/>1024-dim - 13 API Keys"]
     end
 
-    ClientLayer -->|REST / JSON (HTTPS)| APILayer
+    ClientLayer -->|"REST / JSON HTTPS"| APILayer
     APILayer --> EngineLayer
     ModelArmor --> EmergencyCheck
-    EmergencyCheck -->|Có nguy cơ cấp cứu| EmergencyScreen
-    EmergencyCheck -->|An toàn lâm sàng| IntentRouter
+    EmergencyCheck -->|"Có nguy cơ cấp cứu"| EmergencyScreen
+    EmergencyCheck -->|"An toàn lâm sàng"| IntentRouter
     IntentRouter --> Subgraphs
     Subgraphs --> PsychologyEngine
     PsychologyEngine --> OutputValidator
     OutputValidator --> APILayer
 
-    RagSub <-->|Cosine Search 1024D| SupabaseDB
-    CatalogSub <-->|Atomic Hold & TTL| CosmosDB
-    TriageSub <-->|Sinh phản hồi lâm sàng| GeminiPool
-    RagSub <-->|Vectorize câu hỏi| MistralPool
+    RagSub <-->|"Cosine Search 1024D"| SupabaseDB
+    CatalogSub <-->|"Atomic Hold & TTL"| CosmosDB
+    TriageSub <-->|"Sinh phản hồi lâm sàng"| GeminiPool
+    RagSub <-->|"Vectorize câu hỏi"| MistralPool
 ```
 
 ### 2.2. Quy Trình Trích Dẫn Thuần Cơ Sở Dữ Liệu (Pure Database-Driven Citations)
@@ -111,15 +111,15 @@ sequenceDiagram
 
     Patient->>NextJS: Gửi mô tả triệu chứng lâm sàng
     NextJS->>FastAPI: POST /api/v1/chat/message
-    FastAPI->>Mistral: Vectorize triệu chứng -> Vector 1024 chiều
+    FastAPI->>Mistral: Vectorize triệu chứng sang Vector 1024 chiều
     Mistral-->>FastAPI: Mảng Vector 1024-dim
     FastAPI->>Supabase: RPC match_knowledge_chunks(embedding, threshold=0.40, count=5)
     Note over Supabase: Cosine Similarity Search trên 3.650 vectors<br/>Bridge metadata: URL trực tiếp + Số QĐ-BYT
     Supabase-->>FastAPI: Top 5 Chunks + 100% URL bài viết chính thống (Bạch Mai, Nhi TW)
     FastAPI->>Cosmos: Tạo khóa giữ chỗ Atomic Slot Hold (doctorId, slotId, TTL=900s)
-    Cosmos-->>FastAPI: Xác nhận Slot Hold ID thành công (độ trễ < 5ms)
+    Cosmos-->>FastAPI: Xác nhận Slot Hold ID thành công (độ trễ dưới 5ms)
     FastAPI-->>NextJS: JSON Payload: Lời khuyên + Khung giờ khám + Thẻ trích dẫn chuẩn
-    NextJS-->>Patient: Hiển thị giao diện hoàn chỉnh (Nút ↗ mở trực tiếp bài viết)
+    NextJS-->>Patient: Hiển thị giao diện hoàn chỉnh có nút liên kết mở trực tiếp bài viết
 ```
 
 ---
