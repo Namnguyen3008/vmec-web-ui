@@ -121,8 +121,9 @@ export function updateLivingContextWithUserMessage(
       {
         sourceId: "BYT_EMERGENCY_2026",
         documentId: "TT-01/2026/TT-BYT",
+        documentCode: "TT-01/2026/TT-BYT",
         label: "Tiêu chuẩn phân loại Triage Cấp cứu CATT (Bộ Y Tế)",
-        url: "https://kcb.vn",
+        url: "https://kcb.vn/upload/2005611/20210723//Huong-dan-QTKT-Tim-Mach.pdf",
         sectionTitle: "Mục Cấp cứu tối cấp: Báo động đỏ 115",
         confidence: 99,
         snippet: "Bệnh nhân có dấu hiệu nguy kịch cần chuyển ngay vào phòng Cấp cứu.",

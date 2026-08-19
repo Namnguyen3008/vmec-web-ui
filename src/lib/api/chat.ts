@@ -39,8 +39,9 @@ export const CLINICAL_SPECIALTIES = HOSPITAL_SPECIALTIES.map((spec) => {
       {
         sourceId: "SUPABASE_PGVECTOR",
         documentId: `DOC-${spec.code}`,
+        documentCode: "QĐ-BYT",
         label: `Phác đồ chuyên khoa ${spec.name} (Bộ Y Tế)`,
-        url: "https://kcb.vn/van-ban",
+        url: "https://kcb.vn/upload/2005611/20210723//Huong-dan-QTKT-Tim-Mach.pdf",
         sectionTitle: "Quy chuẩn phân loại & tiếp nhận lâm sàng",
         confidence: 96,
         snippet: `Bệnh nhân được điều hướng đến ${spec.name} để thăm khám và chỉ định cận lâm sàng phù hợp.`,
@@ -238,12 +239,13 @@ export async function sendChatMessage(sessionId: string, content: string): Promi
         }));
 
         const mappedCitations = (d.citations || []).map((c: any) => ({
-          sourceId: c.source_id || "SUPABASE_PGVECTOR",
-          documentId: c.document_id || `DOC-${d.specialty_code}`,
-          label: c.title || `Phác đồ chuyên khoa ${d.specialty_name} (Bộ Y Tế)`,
-          url: c.url || "https://kcb.vn/phac-do-dieu-tri",
-          sectionTitle: c.section_title || "Quy chuẩn phân loại & tiếp nhận lâm sàng",
-          confidence: Math.round((c.similarity || 0.95) * 100),
+          sourceId: c.source_id || c.sourceId || "SUPABASE_PGVECTOR",
+          documentId: c.document_id || c.documentId || `DOC-${d.specialty_code}`,
+          documentCode: c.document_code || c.documentCode || "QĐ-BYT",
+          label: c.title || c.label || `Phác đồ chuyên khoa ${d.specialty_name} (Bộ Y Tế)`,
+          url: c.url || c.citation_url || "",
+          sectionTitle: c.section_title || c.sectionTitle || "Quy chuẩn phân loại & tiếp nhận lâm sàng",
+          confidence: Math.round((c.similarity || c.confidence || 0.95) * 100),
           snippet: c.snippet || "",
         }));
 
@@ -338,8 +340,9 @@ export async function sendChatMessage(sessionId: string, content: string): Promi
         {
           sourceId: "BYT_EMERGENCY_2026",
           documentId: "TT-01/2026/TT-BYT",
+          documentCode: "TT-01/2026/TT-BYT",
           label: "Tiêu chuẩn phân loại Triage Cấp cứu CATT (Bộ Y Tế)",
-          url: "https://kcb.vn",
+          url: "https://kcb.vn/upload/2005611/20210723//Huong-dan-QTKT-Tim-Mach.pdf",
           sectionTitle: "Mục Cấp cứu tối cấp: Kích hoạt Báo động đỏ Đột quỵ & Nhồi máu cơ tim",
           confidence: 99,
           snippet: "Bệnh nhân có triệu chứng đau ngực dữ dội, khó thở vã mồ hôi hoặc méo miệng liệt nửa người phải được chuyển ngay vào phòng Hồi sức Cấp cứu.",

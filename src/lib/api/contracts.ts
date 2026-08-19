@@ -76,9 +76,12 @@ export interface ChatMessage {
   citations: Array<{
     sourceId: string | null;
     documentId: string | null;
+    documentCode?: string | null;
     label: string;
     url: string | null;
     sectionTitle: string | null;
+    confidence?: number;
+    snippet?: string | null;
   }>;
   metadata: Record<string, unknown>;
   createdAt: string;
