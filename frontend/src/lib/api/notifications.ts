@@ -2,7 +2,7 @@ import { apiRequest } from "@/lib/api/client";
 import type { NotificationItem } from "@/lib/api/contracts";
 import { getAuthSession } from "@/lib/auth/session";
 
-const API_BASE = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000").replace(/\/$/, "");
+const API_BASE = (process.env.NEXT_PUBLIC_API_URL || "https://vmec-api.onrender.com").replace(/\/$/, "");
 
 function mapItem(raw: Record<string, unknown>): NotificationItem {
   return {

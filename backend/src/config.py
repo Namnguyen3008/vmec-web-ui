@@ -40,7 +40,12 @@ class Settings(BaseSettings):
     app_port: int = Field(default=8000, ge=1, le=65535)
     app_host: str = "0.0.0.0"
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
-    cors_origins: str = "http://localhost:3000,http://127.0.0.1:3000,https://vmec-healthcare-web.vercel.app"
+    cors_origins: str = (
+        "http://localhost:3000,"
+        "http://127.0.0.1:3000,"
+        "https://vmec-healthcare-web.vercel.app,"
+        "https://vmec-healthcare-web-namnguyen3008s-projects.vercel.app"
+    )
 
     # Google Gemini Generative AI (Strict Policy: ONLY gemini-3.1-flash-lite & gemini-3.5-flash-lite)
     gemini_api_key: SecretStr = SecretStr("")
