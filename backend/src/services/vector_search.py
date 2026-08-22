@@ -296,6 +296,100 @@ class VectorSearchClient:
             latency_ms=elapsed_ms,
         )
 
+    async def search_emergency_vectors(
+        self,
+        query: str,
+        match_count: int | None = None,
+        similarity_threshold: float | None = None,
+        filter_specialty: str | None = None,
+    ) -> VectorSearchResult:
+        """
+        Executes dedicated semantic similarity search on Supabase emergency_knowledge_chunks table.
+        """
+        start_time = time.perf_counter()
+        count = match_count or self.settings.retrieval_candidate_limit
+        threshold = similarity_threshold or 0.35
+
+        query_vector = await self.embedding_service.embed_text(query)
+        headers = {
+            "apikey": self._anon_key,
+            "Authorization": f"Bearer {self._anon_key}",
+            "Content-Type": "application/json",
+        }
+        payload = {
+            "query_embedding": query_vector,
+            "match_threshold": threshold,
+            "match_count": count,
+        }
+        rpc_url = f"{self._supabase_url}/rest/v1/rpc/match_emergency_knowledge_chunks"
+
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            resp = await client.post(rpc_url, json=payload, headers=headers)
+            if resp.status_code != 200:
+                logger.error(
+                    "Supabase emergency pgvector RPC failed with HTTP %d: %s",
+                    resp.status_code,
+                    resp.text[:200],
+                )
+                elapsed_ms = (time.perf_counter() - start_time) * 1000
+                return VectorSearchResult(
+                    top_specialty_code="CAP_CUU",
+                    top_specialty_name="Khoa Cấp Cứu 115 & Đột Quỵ Khẩn Cấp",
+                    confidence=0.90,
+                    latency_ms=elapsed_ms,
+                )
+
+            raw_chunks = resp.json()
+
+        chunks: list[KnowledgeChunkMatch] = []
+        citations: list[Citation] = []
+        grounding_lines: list[str] = []
+
+        for item in raw_chunks:
+            meta = item.get("metadata") or {}
+            chunk = KnowledgeChunkMatch(
+                chunk_id=str(item.get("chunk_id", "")),
+                record_id=str(item.get("record_id", "")),
+                normalized_text=str(item.get("normalized_text", "")),
+                metadata=meta,
+                similarity=float(item.get("similarity", 0.0)),
+            )
+            chunks.append(chunk)
+
+            spec_name = item.get("specialty_name") or "Khoa Cấp Cứu"
+            title = f"Phác đồ Cấp cứu - {spec_name}"
+            raw_url = item.get("citation_url") or "https://kcb.vn"
+            url = raw_url if raw_url.startswith("http") else "https://kcb.vn"
+
+            citation = Citation(
+                source_id="BYT_EMERGENCY_2026",
+                document_id=chunk.chunk_id,
+                title=title,
+                url=url,
+                section_title="Phác đồ Xử trí Cấp cứu Tối cấp",
+                snippet=chunk.normalized_text[:300],
+                confidence=round(chunk.similarity * 100, 1),
+            )
+            citations.append(citation)
+            grounding_lines.append(
+                f"[{title}] (Độ khớp cấp cứu: {chunk.similarity:.2%}):\n{chunk.normalized_text}"
+            )
+
+        top_code = raw_chunks[0].get("specialty_code", "CAP_CUU") if raw_chunks else "CAP_CUU"
+        top_name = raw_chunks[0].get("specialty_name", "Khoa Cấp Cứu 115 & Đột Quỵ Khẩn Cấp") if raw_chunks else "Khoa Cấp Cứu 115 & Đột Quỵ Khẩn Cấp"
+        confidence = float(raw_chunks[0].get("similarity", 0.90)) if raw_chunks else 0.90
+
+        elapsed_ms = (time.perf_counter() - start_time) * 1000
+        return VectorSearchResult(
+            top_specialty_code=top_code,
+            top_specialty_name=top_name,
+            confidence=confidence,
+            matched_chunks=chunks,
+            citations=citations,
+            grounding_text="\n\n---\n\n".join(grounding_lines),
+            latency_ms=elapsed_ms,
+        )
+
 
 _vector_client_instance: VectorSearchClient | None = None
 

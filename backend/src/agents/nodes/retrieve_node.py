@@ -6,7 +6,7 @@ Executes semantic RAG search across Supabase pgvector (2,670 vectors) when all 4
 from typing import Any
 
 from src.agents.state import AgentState
-from src.services.vector_search import get_vector_client
+from src.services.unified_retrieval import get_unified_retrieval_engine
 
 
 async def retrieve_node(state: AgentState) -> dict[str, Any]:
@@ -31,8 +31,8 @@ async def retrieve_node(state: AgentState) -> dict[str, Any]:
         " ; ".join(query_parts) if query_parts else state.get("user_message", "")
     )
 
-    vector_client = get_vector_client()
-    result = await vector_client.search(full_query, match_count=5)
+    unified_engine = get_unified_retrieval_engine()
+    result = await unified_engine.search(full_query, match_count=5)
 
     citations_list = [c.model_dump() for c in result.citations]
 

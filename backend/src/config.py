@@ -6,9 +6,12 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 DEFAULT_TRUSTED_PUBLIC_CITATION_HOSTS: Final = frozenset(
     {
+        "bachmai.gov.vn",
+        "benhviennhitrunguong.gov.vn",
         "cdn.who.int",
         "icd.who.int",
         "iris.who.int",
+        "kcb.vn",
         "medlineplus.gov",
         "moh.gov.vn",
         "pmc.ncbi.nlm.nih.gov",
@@ -97,6 +100,12 @@ class Settings(BaseSettings):
     azure_cosmos_container_audit: str = "audit_logs"
     cosmos_session_ttl_seconds: int = Field(default=86400, ge=300, le=2_592_000)  # 24h
     cosmos_slot_hold_ttl_seconds: int = Field(default=900, ge=60, le=3600)  # 15m
+
+    # GraphRAG (Kùzu DB Embedded Property Graph)
+    graph_rag_enabled: bool = True
+    graph_db_path: str = "backend/data/kuzu_clinical_graph"
+    graph_weight: float = Field(default=0.45, ge=0.0, le=1.0)
+    vector_weight: float = Field(default=0.55, ge=0.0, le=1.0)
 
     # Feature Flags for 28-Node Chat Flow
     rag_enabled: bool = True

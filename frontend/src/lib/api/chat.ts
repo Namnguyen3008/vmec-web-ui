@@ -50,25 +50,83 @@ export const CLINICAL_SPECIALTIES = HOSPITAL_SPECIALTIES.map((spec) => {
   };
 });
 
-// Từ khóa dấu hiệu Cấp cứu 115 (Emergency Guardrails)
-const EMERGENCY_KEYWORDS = [
-  "đau ngực dữ dội",
-  "khó thở vã mồ hôi",
-  "liệt nửa người",
-  "méo miệng",
-  "nói đớ",
-  "đột quỵ",
-  "sốc phản vệ",
-  "ngất xỉu",
-  "nôn ra máu",
-  "hôn mê",
-  "co giật liên tục",
-  "chảy máu không cầm",
+function normalizeVietnamese(text: string): string {
+  return text
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/g, "d")
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+const EMERGENCY_REGEXES = [
+  // 1. Tim Mạch / Nhồi máu cơ tim
+  /\b(dau|tuc|that|de|nang|rat|nghen)\b.*?\bnguc\b.*?\b(du doi|bop nghet|nhu da de|lan len|lan ra|trai|cap)\b/,
+  /\bdau that nguc\b/,
+  /\b(va|do|ra)\s+mo hoi\b.*?\b(kho tho|dau nguc|that nguc|tuc nguc)\b/,
+  /\b(kho tho|dau nguc|that nguc|tuc nguc)\b.*?\b(va|do|ra)\s+mo hoi\b/,
+  /\bdau nguc\b.*?\blan\b.*?\b(tay|vai|cam|co)\b/,
+  /\bngung tim\b/,
+  // 2. Đột quỵ & Thần kinh cấp cứu
+  /\bdot quy\b/,
+  /\b(liet|yeu)\s+(nua nguoi|tay chan|mot ben)\b/,
+  /\b(meo|lech)\s+(mieng|mat)\b/,
+  /\b(noi do|noi ngong|khong noi duoc|kho noi)\b/,
+  /\b(dau dau|nhuc dau)\b.*?\b(du doi|nhu bua bo|set danh|dot ngot)\b/,
+  // 3. Suy hô hấp cấp
+  /\b(suy ho hap|ngung tho|khong tho duoc|nghet tho du doi)\b/,
+  /\bkho tho\b.*?\b(du doi|tim tai|rut lom|tho rit|muon ngat)\b/,
+  /\btim tai\s+(moi|dau chi|nguoi)\b/,
+  // 4. Sốc phản vệ & Dị ứng nặng
+  /\bsoc phan ve\b/,
+  /\b(nghen co hong|kho tho|phu mat)\b.*?\b(sau khi tiem|sau khi uong|sau khi an)\b/,
+  // 5. Mất ý thức / Co giật
+  /\b(hon me|ngat xiu|bat tinh|mat y thuc)\b/,
+  /\b(co giat|dong kinh)\b.*?\b(lien tuc|du doi|toan than)\b/,
+  // 6. Xuất huyết & Chấn thương
+  /\b(non|oi)\s+ra\s+mau\b/,
+  /\b(di ngoai|di cau)\s+ra\s+mau\s+(xoi xa|den nhu ba ca phe|o at)\b/,
+  /\bchay mau\b.*?\b(khong cam|o at|phun)\b/,
+  /\bchan thuong so nao\b/,
+];
+
+const HISTORICAL_OR_NEGATION_MARKERS = [
+  "khong bi",
+  "khong co",
+  "khong con",
+  "da het",
+  "chua tung",
+  "truoc day",
+  "nam ngoai",
+  "hoi truoc",
+  "da tung",
+  "tung bi",
+  "nam truoc",
 ];
 
 export function detectEmergency(text: string): boolean {
-  const lower = text.toLowerCase();
-  return EMERGENCY_KEYWORDS.some((kw) => lower.includes(kw));
+  const norm = normalizeVietnamese(text);
+  if (!norm) return false;
+
+  for (const regex of EMERGENCY_REGEXES) {
+    const match = regex.exec(norm);
+    if (match) {
+      const matchIndex = match.index;
+      const prefix = norm.slice(0, matchIndex);
+
+      const isDisqualified = HISTORICAL_OR_NEGATION_MARKERS.some(
+        (m) => prefix.includes(m) || norm.includes(`${m} ${match[0]}`)
+      );
+
+      if (!isDisqualified) {
+        return true;
+      }
+    }
+  }
+
+  return false;
 }
 
 export function matchSpecialty(text: string) {

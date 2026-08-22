@@ -17,30 +17,41 @@ EMERGENCY_ACTION_MESSAGE: Final[str] = (
     "⚠️ **Hệ thống tạm dừng quy trình đặt lịch khám thông thường để đảm bảo an toàn tính mạng cho bạn.**"
 )
 
-# Adult & General Emergency Keywords & Patterns (Normalized without accents)
-EMERGENCY_RULES: Final[list[tuple[str, str, str]]] = [
-    # (rule_id, category, phrase_normalized)
-    ("EMG_CARDIO_01", "CARDIO", "dau nguc du doi"),
-    ("EMG_CARDIO_02", "CARDIO", "dau nguc chen ep"),
-    ("EMG_CARDIO_03", "CARDIO", "kho tho va mo hoi"),
-    ("EMG_CARDIO_04", "CARDIO", "dau nguc lan ra canh tay trai"),
-    ("EMG_CARDIO_05", "CARDIO", "ngung tim"),
-    ("EMG_STROKE_01", "STROKE", "dot quy"),
-    ("EMG_STROKE_02", "STROKE", "liet nua nguoi"),
-    ("EMG_STROKE_03", "STROKE", "meo mieng"),
-    ("EMG_STROKE_04", "STROKE", "noi do"),
-    ("EMG_STROKE_05", "STROKE", "yeu nua nguoi dot ngot"),
-    ("EMG_RESP_01", "RESPIRATORY", "suy ho hap"),
-    ("EMG_RESP_02", "RESPIRATORY", "khong tho duoc"),
-    ("EMG_RESP_03", "RESPIRATORY", "nghet tho du doi"),
-    ("EMG_ANAPHYLAXIS_01", "ALLERGY", "soc phan ve"),
-    ("EMG_NEURO_01", "NEURO", "hon me"),
-    ("EMG_NEURO_02", "NEURO", "ngat xiu"),
-    ("EMG_NEURO_03", "NEURO", "co giat lien tuc"),
-    ("EMG_GI_01", "GI", "non ra mau"),
-    ("EMG_GI_02", "GI", "di ngoai ra mau xoi xa"),
-    ("EMG_TRAUMA_01", "TRAUMA", "chay mau khong cam"),
-    ("EMG_TRAUMA_02", "TRAUMA", "chan thuong so nao"),
+# Robust Clinical Emergency Patterns (Regex on normalized ASCII text)
+EMERGENCY_PATTERNS: Final[list[tuple[str, str, re.Pattern[str]]]] = [
+    # 1. Cardiovascular Emergencies (AMI / ACS)
+    ("EMG_CARDIO_01", "CARDIO", re.compile(r"\b(dau|tuc|that|de|nang|rat|nghen)\b.*?\bnguc\b.*?\b(du doi|bop nghet|nhu da de|lan len|lan ra|trai|cap)\b")),
+    ("EMG_CARDIO_02", "CARDIO", re.compile(r"\bdau that nguc\b")),
+    ("EMG_CARDIO_03", "CARDIO", re.compile(r"\b(va|do|ra)\s+mo hoi\b.*?\b(kho tho|dau nguc|that nguc|tuc nguc)\b")),
+    ("EMG_CARDIO_04", "CARDIO", re.compile(r"\b(kho tho|dau nguc|that nguc|tuc nguc)\b.*?\b(va|do|ra)\s+mo hoi\b")),
+    ("EMG_CARDIO_05", "CARDIO", re.compile(r"\bdau nguc\b.*?\blan\b.*?\b(tay|vai|cam|co)\b")),
+    ("EMG_CARDIO_06", "CARDIO", re.compile(r"\bngung tim\b")),
+
+    # 2. Stroke & Acute Neurological Emergencies
+    ("EMG_STROKE_01", "STROKE", re.compile(r"\bdot quy\b")),
+    ("EMG_STROKE_02", "STROKE", re.compile(r"\b(liet|yeu)\s+(nua nguoi|tay chan|mot ben)\b")),
+    ("EMG_STROKE_03", "STROKE", re.compile(r"\b(meo|lech)\s+(mieng|mat)\b")),
+    ("EMG_STROKE_04", "STROKE", re.compile(r"\b(noi do|noi ngong|khong noi duoc|kho noi)\b")),
+    ("EMG_STROKE_05", "STROKE", re.compile(r"\b(dau dau|nhuc dau)\b.*?\b(du doi|nhu bua bo|set danh|dot ngot)\b")),
+
+    # 3. Acute Respiratory Distress
+    ("EMG_RESP_01", "RESPIRATORY", re.compile(r"\b(suy ho hap|ngung tho|khong tho duoc|nghet tho du doi)\b")),
+    ("EMG_RESP_02", "RESPIRATORY", re.compile(r"\bkho tho\b.*?\b(du doi|tim tai|rut lom|tho rit|muon ngat)\b")),
+    ("EMG_RESP_03", "RESPIRATORY", re.compile(r"\btim tai\s+(moi|dau chi|nguoi)\b")),
+
+    # 4. Anaphylaxis & Severe Allergic Shock
+    ("EMG_ANAPHYLAXIS_01", "ALLERGY", re.compile(r"\bsoc phan ve\b")),
+    ("EMG_ANAPHYLAXIS_02", "ALLERGY", re.compile(r"\b(nghen co hong|kho tho|phu mat)\b.*?\b(sau khi tiem|sau khi uong|sau khi an)\b")),
+
+    # 5. Neurological / Consciousness / Seizures
+    ("EMG_NEURO_01", "NEURO", re.compile(r"\b(hon me|ngat xiu|bat tinh|mat y thuc)\b")),
+    ("EMG_NEURO_02", "NEURO", re.compile(r"\b(co giat|dong kinh)\b.*?\b(lien tuc|du doi|toan than)\b")),
+
+    # 6. Severe Hemorrhage & Trauma
+    ("EMG_GI_01", "GI", re.compile(r"\b(non|oi)\s+ra\s+mau\b")),
+    ("EMG_GI_02", "GI", re.compile(r"\b(di ngoai|di cau)\s+ra\s+mau\s+(xoi xa|den nhu ba ca phe|o at)\b")),
+    ("EMG_TRAUMA_01", "TRAUMA", re.compile(r"\bchay mau\b.*?\b(khong cam|o at|phun)\b")),
+    ("EMG_TRAUMA_02", "TRAUMA", re.compile(r"\bchan thuong so nao\b")),
 ]
 
 NEGATION_MARKERS: Final[tuple[str, ...]] = (
@@ -59,6 +70,8 @@ HISTORICAL_MARKERS: Final[tuple[str, ...]] = (
     "nam ngoai",
     "hoi truoc",
     "da tung",
+    "tung bi",
+    "nam truoc",
 )
 
 
@@ -68,7 +81,7 @@ class EmergencyResult:
     rule_ids: tuple[str, ...] = ()
     categories: tuple[str, ...] = ()
     action: str = ""
-    ruleset_version: str = "vmec-emergency-v1"
+    ruleset_version: str = "vmec-emergency-v2"
 
 
 def normalize_vietnamese_text(text: str) -> str:
@@ -82,30 +95,29 @@ def normalize_vietnamese_text(text: str) -> str:
 
 def screen_emergency(text: str) -> EmergencyResult:
     """
-    Performs deterministic screening of emergency symptoms.
+    Performs deterministic screening of emergency symptoms using clinical regexes.
     """
     normalized = normalize_vietnamese_text(text)
     if not normalized:
         return EmergencyResult(emergency=False)
 
-    # Check for negations or historical mentions that disqualify an acute emergency
-    # For example: "tôi không bị đau ngực" or "năm ngoái đã từng ngất xỉu"
     matched_rules: list[str] = []
     matched_categories: list[str] = []
 
-    for rule_id, category, phrase in EMERGENCY_RULES:
-        if phrase in normalized:
-            idx = normalized.find(phrase)
-            prefix = normalized[:idx]
+    for rule_id, category, pattern in EMERGENCY_PATTERNS:
+        match = pattern.search(normalized)
+        if match:
+            match_start = match.start()
+            prefix = normalized[:match_start]
 
             # Check if prefix contains negation markers
             is_negated = any(neg in prefix for neg in NEGATION_MARKERS) or any(
-                f"{neg} {phrase}" in normalized for neg in NEGATION_MARKERS
+                f"{neg} {match.group(0)}" in normalized for neg in NEGATION_MARKERS
             )
 
             # Check if prefix contains historical markers
             is_historical = any(hist in prefix for hist in HISTORICAL_MARKERS) or any(
-                f"{hist} {phrase}" in normalized for hist in HISTORICAL_MARKERS
+                f"{hist} {match.group(0)}" in normalized for hist in HISTORICAL_MARKERS
             )
 
             if not is_negated and not is_historical:
